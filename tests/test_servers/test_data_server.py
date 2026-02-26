@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bbopt.core import data_profiler
+from gtd.core import data_profiler
 
 
 class TestProfileDataset:

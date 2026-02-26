@@ -1,4 +1,4 @@
-"""Tests for bbopt.core.data_profiler module."""
+"""Tests for gtd.core.data_profiler module."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bbopt.core.data_profiler import (
+from gtd.core.data_profiler import (
     compute_correlations,
     detect_data_issues,
     get_column_stats,

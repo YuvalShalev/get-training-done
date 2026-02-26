@@ -7,9 +7,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from bbopt.core import data_profiler
+from gtd.core import data_profiler
 
-mcp = FastMCP("bbopt-data")
+mcp = FastMCP("gtd-data")
 
 
 def _json_response(data: dict[str, Any]) -> str:

@@ -1,11 +1,11 @@
 # Quick Start
 
-Get up and running with bbopt in under five minutes. This guide walks you through
+Get up and running with gtd in under five minutes. This guide walks you through
 installation, your first model optimization, and how to interpret the results.
 
 ## Installation
 
-Install bbopt and its dependencies:
+Install gtd and its dependencies:
 
 ```bash
 pip install -e .
@@ -21,7 +21,7 @@ pip install -e ".[research]"
 ### Verify the installation
 
 ```python
-from bbopt.core import model_registry
+from gtd.core import model_registry
 
 models = model_registry.list_available_models()
 print(f"Available models: {len(models)}")
@@ -30,7 +30,7 @@ print(f"Available models: {len(models)}")
 
 ## Your First Optimization
 
-This example trains a Random Forest on the classic Iris dataset using the bbopt
+This example trains a Random Forest on the classic Iris dataset using the gtd
 training pipeline with cross-validation.
 
 ### Step 1: Profile your data
@@ -39,7 +39,7 @@ Before training, profile the dataset to understand its structure, missing values
 and potential issues.
 
 ```python
-from bbopt.core import data_profiler
+from gtd.core import data_profiler
 
 profile = data_profiler.profile_dataset(
     path="data/iris.csv",
@@ -62,7 +62,7 @@ A workspace is a directory that stores all training runs, models, metrics, and
 reports for a single optimization session.
 
 ```python
-from bbopt.core import workspace
+from gtd.core import workspace
 
 ws = workspace.create_workspace("./my_optimization")
 ws_path = ws["workspace_path"]
@@ -74,7 +74,7 @@ print(f"Workspace created at: {ws_path}")
 Train a Random Forest classifier with cross-validation:
 
 ```python
-from bbopt.core import trainer
+from gtd.core import trainer
 
 result = trainer.train_model(
     workspace_path=ws_path,
@@ -101,7 +101,7 @@ print(f"Training time: {result['training_time']:.2f}s")
 Run a full evaluation to get detailed metrics:
 
 ```python
-from bbopt.core import evaluator
+from gtd.core import evaluator
 
 metrics = evaluator.evaluate_model(
     workspace_path=ws_path,
@@ -194,7 +194,7 @@ The `evaluate_model` function returns different metrics depending on the task ty
 After training, your workspace directory looks like this:
 
 ```
-bbopt_workspace_20260223_120000/
+gtd_workspace_20260223_120000/
   metadata.json          # Workspace-level tracking
   data/                  # Copied datasets
   runs/
@@ -214,4 +214,4 @@ bbopt_workspace_20260223_120000/
 - See [Binary Classification](binary_classification.md) for a detailed
   walkthrough on a churn prediction dataset.
 - See [Regression](regression.md) for optimizing a regression model.
-- Use the MCP servers to integrate bbopt into an agent-driven workflow.
+- Use the MCP servers to integrate gtd into an agent-driven workflow.

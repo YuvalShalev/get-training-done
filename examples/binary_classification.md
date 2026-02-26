@@ -18,7 +18,7 @@ Assume the dataset is saved at `data/churn.csv`.
 Start by understanding your data before building any model.
 
 ```python
-from bbopt.core import data_profiler
+from gtd.core import data_profiler
 
 profile = data_profiler.profile_dataset(
     path="data/churn.csv",
@@ -95,7 +95,7 @@ for name, corr in sorted_corrs[:10]:
 Based on the profiling results, apply appropriate preprocessing.
 
 ```python
-from bbopt.core import feature_engine
+from gtd.core import feature_engine
 
 result = feature_engine.engineer_features(
     data_path="data/churn.csv",
@@ -136,7 +136,7 @@ print(f"Columns: {result['new_columns'][:10]}...")
 ## Step 3: Create a Workspace
 
 ```python
-from bbopt.core import workspace
+from gtd.core import workspace
 
 ws = workspace.create_workspace("./churn_optimization")
 ws_path = ws["workspace_path"]
@@ -149,7 +149,7 @@ ws_path = ws["workspace_path"]
 Start with an interpretable baseline.
 
 ```python
-from bbopt.core import trainer
+from gtd.core import trainer
 
 # Identify feature columns (all columns except target)
 import pandas as pd
@@ -251,7 +251,7 @@ print(f"LightGBM -- Accuracy: {lgb_result['mean_score']:.4f}")
 ### Side-by-side comparison
 
 ```python
-from bbopt.core import evaluator
+from gtd.core import evaluator
 
 comparison = evaluator.compare_runs(
     workspace_path=ws_path,

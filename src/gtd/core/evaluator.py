@@ -14,7 +14,7 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from bbopt.core import workspace
+from gtd.core import workspace
 
 logger = logging.getLogger(__name__)
 

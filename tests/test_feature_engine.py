@@ -1,4 +1,4 @@
-"""Tests for bbopt.core.feature_engine module."""
+"""Tests for gtd.core.feature_engine module."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bbopt.core.feature_engine import auto_preprocess, engineer_features
+from gtd.core.feature_engine import auto_preprocess, engineer_features
 
 
 # ---------------------------------------------------------------------------

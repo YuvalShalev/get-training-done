@@ -7,14 +7,14 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from bbopt.research.arxiv_client import search_arxiv as _search_arxiv
-from bbopt.research.kaggle_client import (
+from gtd.research.arxiv_client import search_arxiv as _search_arxiv
+from gtd.research.kaggle_client import (
     search_kaggle_datasets as _search_kaggle_datasets,
     search_kaggle_notebooks as _search_kaggle_notebooks,
 )
-from bbopt.research.pwc_client import search_papers_with_code as _search_papers_with_code
+from gtd.research.pwc_client import search_papers_with_code as _search_papers_with_code
 
-mcp = FastMCP("bbopt-research")
+mcp = FastMCP("gtd-research")
 
 
 @mcp.tool()

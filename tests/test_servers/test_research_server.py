@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from bbopt.research import arxiv_client, kaggle_client, pwc_client
+from gtd.research import arxiv_client, kaggle_client, pwc_client
 
 # ─── Sample response data ────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ SAMPLE_PWC_JSON = {
 class TestSearchArxiv:
     """Tests for the arXiv search client."""
 
-    @patch("bbopt.research.arxiv_client.requests.get")
+    @patch("gtd.research.arxiv_client.requests.get")
     def test_successful_search(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -124,7 +124,7 @@ class TestSearchArxiv:
         assert len(result["results"]) == 2
         assert result["query"] == "xgboost gradient boosting"
 
-    @patch("bbopt.research.arxiv_client.requests.get")
+    @patch("gtd.research.arxiv_client.requests.get")
     def test_result_structure(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -143,7 +143,7 @@ class TestSearchArxiv:
         assert paper["published"] == "2016-03-09T00:00:00Z"
         assert "cs.LG" in paper["categories"]
 
-    @patch("bbopt.research.arxiv_client.requests.get")
+    @patch("gtd.research.arxiv_client.requests.get")
     def test_timeout_returns_error(self, mock_get: Mock) -> None:
         mock_get.side_effect = requests.exceptions.Timeout("Connection timed out")
 
@@ -153,7 +153,7 @@ class TestSearchArxiv:
         assert "timed out" in result["error"]
         assert result["query"] == "test query"
 
-    @patch("bbopt.research.arxiv_client.requests.get")
+    @patch("gtd.research.arxiv_client.requests.get")
     def test_connection_error_returns_error(self, mock_get: Mock) -> None:
         mock_get.side_effect = requests.exceptions.ConnectionError("No connection")
 
@@ -162,7 +162,7 @@ class TestSearchArxiv:
         assert "error" in result
         assert "connect" in result["error"].lower()
 
-    @patch("bbopt.research.arxiv_client.requests.get")
+    @patch("gtd.research.arxiv_client.requests.get")
     def test_http_error_returns_error(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 500
@@ -175,7 +175,7 @@ class TestSearchArxiv:
         assert "error" in result
         assert "500" in result["error"]
 
-    @patch("bbopt.research.arxiv_client.requests.get")
+    @patch("gtd.research.arxiv_client.requests.get")
     def test_api_called_with_correct_params(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -197,8 +197,8 @@ class TestSearchArxiv:
 class TestSearchKaggleDatasets:
     """Tests for the Kaggle datasets search client."""
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_successful_search(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_response = Mock()
@@ -214,8 +214,8 @@ class TestSearchKaggleDatasets:
         assert result["total_results"] == 2
         assert result["query"] == "iris"
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_result_structure(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_response = Mock()
@@ -232,7 +232,7 @@ class TestSearchKaggleDatasets:
         assert "kaggle.com/datasets/" in ds["url"]
         assert ds["download_count"] == 150000
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
     def test_no_credentials_returns_error(self, mock_auth: Mock) -> None:
         mock_auth.return_value = None
 
@@ -241,8 +241,8 @@ class TestSearchKaggleDatasets:
         assert "error" in result
         assert "credentials" in result["error"].lower()
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_timeout_returns_error(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_get.side_effect = requests.exceptions.Timeout("Connection timed out")
@@ -252,8 +252,8 @@ class TestSearchKaggleDatasets:
         assert "error" in result
         assert "timed out" in result["error"]
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_auth_failure_returns_error(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("bad_user", "bad_key")
         mock_response = Mock()
@@ -271,8 +271,8 @@ class TestSearchKaggleDatasets:
 class TestSearchKaggleNotebooks:
     """Tests for the Kaggle notebooks search client."""
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_successful_search(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_response = Mock()
@@ -287,8 +287,8 @@ class TestSearchKaggleNotebooks:
         assert result["query"] == "titanic"
         assert len(result["results"]) == 2
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_result_structure(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_response = Mock()
@@ -306,8 +306,8 @@ class TestSearchKaggleNotebooks:
         assert nb["score"] == 3200
         assert nb["language"] == "Python"
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_sort_by_parameter_passed(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_response = Mock()
@@ -321,7 +321,7 @@ class TestSearchKaggleNotebooks:
         call_kwargs = mock_get.call_args
         assert call_kwargs[1]["params"]["sortBy"] == "voteCount"
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
     def test_no_credentials_returns_error(self, mock_auth: Mock) -> None:
         mock_auth.return_value = None
 
@@ -330,8 +330,8 @@ class TestSearchKaggleNotebooks:
         assert "error" in result
         assert "credentials" in result["error"].lower()
 
-    @patch("bbopt.research.kaggle_client._get_kaggle_auth")
-    @patch("bbopt.research.kaggle_client.requests.get")
+    @patch("gtd.research.kaggle_client._get_kaggle_auth")
+    @patch("gtd.research.kaggle_client.requests.get")
     def test_connection_error_returns_error(self, mock_get: Mock, mock_auth: Mock) -> None:
         mock_auth.return_value = ("test_user", "test_key")
         mock_get.side_effect = requests.exceptions.ConnectionError("No route")
@@ -348,7 +348,7 @@ class TestSearchKaggleNotebooks:
 class TestSearchPapersWithCode:
     """Tests for the Papers with Code search client."""
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_successful_search(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -364,7 +364,7 @@ class TestSearchPapersWithCode:
         assert len(result["results"]) == 2
         assert result["query"] == "gradient boosting"
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_result_structure(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -383,7 +383,7 @@ class TestSearchPapersWithCode:
         assert "Classification" in paper["tasks"]
         assert "Regression" in paper["tasks"]
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_task_type_filter_sent(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -396,7 +396,7 @@ class TestSearchPapersWithCode:
         call_kwargs = mock_get.call_args
         assert call_kwargs[1]["params"]["task"] == "image-classification"
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_task_type_none_not_sent(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200
@@ -409,7 +409,7 @@ class TestSearchPapersWithCode:
         call_kwargs = mock_get.call_args
         assert "task" not in call_kwargs[1]["params"]
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_timeout_returns_error(self, mock_get: Mock) -> None:
         mock_get.side_effect = requests.exceptions.Timeout("Timed out")
 
@@ -418,7 +418,7 @@ class TestSearchPapersWithCode:
         assert "error" in result
         assert "timed out" in result["error"]
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_connection_error_returns_error(self, mock_get: Mock) -> None:
         mock_get.side_effect = requests.exceptions.ConnectionError("Failed")
 
@@ -427,7 +427,7 @@ class TestSearchPapersWithCode:
         assert "error" in result
         assert "connect" in result["error"].lower()
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_http_error_returns_error(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 503
@@ -440,7 +440,7 @@ class TestSearchPapersWithCode:
         assert "error" in result
         assert "503" in result["error"]
 
-    @patch("bbopt.research.pwc_client.requests.get")
+    @patch("gtd.research.pwc_client.requests.get")
     def test_null_pdf_url_becomes_none(self, mock_get: Mock) -> None:
         mock_response = Mock()
         mock_response.status_code = 200

@@ -16,7 +16,7 @@ Assume the dataset is saved at `data/housing.csv`.
 ## Step 1: Profile the Dataset
 
 ```python
-from bbopt.core import data_profiler
+from gtd.core import data_profiler
 
 profile = data_profiler.profile_dataset(
     path="data/housing.csv",
@@ -96,7 +96,7 @@ For regression, common preprocessing steps include log-transforming skewed
 features, scaling, and creating interaction terms.
 
 ```python
-from bbopt.core import feature_engine
+from gtd.core import feature_engine
 
 result = feature_engine.engineer_features(
     data_path="data/housing.csv",
@@ -130,7 +130,7 @@ print(f"Operations: {result['operations_applied']}")
 ## Step 3: Create a Workspace
 
 ```python
-from bbopt.core import workspace
+from gtd.core import workspace
 
 ws = workspace.create_workspace("./housing_optimization")
 ws_path = ws["workspace_path"]
@@ -139,7 +139,7 @@ ws_path = ws["workspace_path"]
 ## Step 4: Explore Available Regression Models
 
 ```python
-from bbopt.core import model_registry
+from gtd.core import model_registry
 
 regression_models = model_registry.list_available_models(task_type="regression")
 print(f"Available regression models: {len(regression_models)}")
@@ -152,7 +152,7 @@ for model in regression_models:
 ### Baseline -- Linear Regression
 
 ```python
-from bbopt.core import trainer
+from gtd.core import trainer
 import pandas as pd
 
 df = pd.read_csv("data/housing_processed.csv")
@@ -275,7 +275,7 @@ print(f"LightGBM -- R2: {lgb_result['mean_score']:.4f}")
 ## Step 6: Compare Models
 
 ```python
-from bbopt.core import evaluator
+from gtd.core import evaluator
 
 comparison = evaluator.compare_runs(
     workspace_path=ws_path,

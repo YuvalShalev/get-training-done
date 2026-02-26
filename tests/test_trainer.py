@@ -1,4 +1,4 @@
-"""Tests for bbopt.core.trainer module."""
+"""Tests for gtd.core.trainer module."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bbopt.core import workspace
-from bbopt.core.trainer import predict, train_model
+from gtd.core import workspace
+from gtd.core.trainer import predict, train_model
 
 
 # ---------------------------------------------------------------------------

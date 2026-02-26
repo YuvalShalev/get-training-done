@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [0.2.0] - 2026-02-26
+
+### Added
+- Claude Code plugin support (`.claude-plugin/plugin.json`)
+- Auto-configured MCP servers via `.mcp.json`
+- `/gtd:train` — full optimization workflow with argument parsing
+- `/gtd:inference` — model predictions with registry integration
+- `/gtd:evaluate` — comprehensive model evaluation
+- `/gtd:models` — trained model registry listing
+- Model registry (`.gtd-state.json`) for tracking trained models across sessions
+- CI/CD with GitHub Actions
+- Self-bootstrapping Python venv for zero-config MCP servers
+- CONTRIBUTING.md and issue templates
+
+### Changed
+- Restructured repo to follow Claude Code plugin conventions
+- README rewritten for plugin-first experience
+- Removed CLI (`gtd setup`) in favor of plugin auto-configuration
+
+## [0.1.0] - 2026-02-24
+
+### Added
+- Initial implementation with 3 MCP servers (data, training, research)
+- 14 supported ML models (classification + regression)
+- 5-phase optimization workflow
+- Cross-validated training with convergence detection
+- arXiv, Kaggle, and Papers with Code research integration

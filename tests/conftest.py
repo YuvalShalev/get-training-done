@@ -1,4 +1,4 @@
-"""Shared test fixtures for bbopt tests."""
+"""Shared test fixtures for gtd tests."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from bbopt.core import workspace
+from gtd.core import workspace
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"

@@ -1,4 +1,4 @@
-"""Tests for bbopt.core.evaluator module."""
+"""Tests for gtd.core.evaluator module."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from bbopt.core import workspace
-from bbopt.core.evaluator import (
+from gtd.core import workspace
+from gtd.core.evaluator import (
     compare_runs,
     evaluate_model,
     get_feature_importance,
     get_optimization_history,
 )
-from bbopt.core.trainer import train_model
+from gtd.core.trainer import train_model
 
 
 # ---------------------------------------------------------------------------

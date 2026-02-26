@@ -1,3 +1,4 @@
+# Python
 .venv/
 __pycache__/
 *.egg-info/
@@ -5,5 +6,18 @@ __pycache__/
 dist/
 build/
 *.pyc
+
+# Runtime artifacts
+gtd_workspace_*/
+.gtd-state.json
+*.joblib
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Lock files
 uv.lock
-bbopt_workspace_*/

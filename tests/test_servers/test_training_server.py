@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from bbopt.core import evaluator, model_registry, trainer, workspace
+from gtd.core import evaluator, model_registry, trainer, workspace
 
 
 class TestListAvailableModels:

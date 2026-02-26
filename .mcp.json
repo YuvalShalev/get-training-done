@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "gtd-data": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/run-server.sh",
+      "args": ["gtd.servers.data_server"]
+    },
+    "gtd-training": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/run-server.sh",
+      "args": ["gtd.servers.training_server"]
+    },
+    "gtd-research": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/run-server.sh",
+      "args": ["gtd.servers.research_server"]
+    }
+  }
+}

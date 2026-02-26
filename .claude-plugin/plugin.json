@@ -1,0 +1,9 @@
+{
+  "name": "get-training-done",
+  "version": "0.2.0",
+  "description": "AI-powered ML optimization for Claude Code. Profile data, research approaches, train models, and iteratively optimize — like having a senior data scientist in your terminal.",
+  "author": {
+    "name": "Yuval Shalev"
+  },
+  "homepage": "https://github.com/yuvalshalev/get-training-done"
+}

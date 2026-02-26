@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold, StratifiedKFold
 
-from bbopt.core import model_registry, workspace
+from gtd.core import model_registry, workspace
 
 logger = logging.getLogger(__name__)
 

@@ -20,7 +20,7 @@ def create_workspace(base_dir: str | Path | None = None) -> dict[str, Any]:
     """
     base = Path(base_dir) if base_dir else Path.cwd()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    workspace_id = f"bbopt_workspace_{timestamp}"
+    workspace_id = f"gtd_workspace_{timestamp}"
     workspace_path = base / workspace_id
 
     dirs = [

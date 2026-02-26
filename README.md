@@ -1,59 +1,65 @@
-# Agent-Driven Black-Box Optimization
+# Get Training Done
 
-An LLM-agent-powered AutoML plugin for [Claude Code](https://claude.com/claude-code) that optimizes ML models the way a senior data scientist would — with domain knowledge, research awareness, and transparent reasoning.
+> AI-powered ML model optimization for Claude Code
 
-## Why This Beats Traditional AutoML
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet.svg)](https://claude.com/claude-code)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Traditional AutoML (Bayesian optimization, grid search, successive halving) treats hyperparameter tuning as a pure math problem. This plugin uses an LLM agent that:
-
-- **Analyzes data first** — profiles distributions, detects class imbalance, finds data leakage before touching a model
-- **Researches what works** — searches arXiv, Kaggle, and Papers with Code for approaches that succeed on similar data
-- **Makes informed decisions** — chooses XGBoost over Random Forest because your data has high cardinality categoricals, not because it's next in the queue
-- **Explains everything** — every model choice, hyperparameter change, and feature engineering step is justified with evidence
-- **Knows when to stop** — convergence detection based on diminishing returns, not arbitrary budgets
+Train and optimize ML models the way a senior data scientist would — with data profiling, research awareness, and transparent reasoning. All from your terminal.
 
 ## Quick Start
 
 ```bash
-# Install
-pip install agent-driven-bbopt
-
-# Configure Claude Code automatically
-bbopt setup
-
-# Open Claude Code and start optimizing
-claude
+# In Claude Code
+/install-plugin https://github.com/yuvalshalev/get-training-done
 ```
 
-Then in Claude Code:
+Then:
 
 ```
-> /ml-optimizer
-
-> I have a dataset at ./data/customers.csv with target column "churn".
-> Find the best model to predict churn. Maximize F1 score.
+/gtd:train path/to/data.csv
 ```
 
-The agent will:
-1. Profile your data and identify issues
-2. Research similar problems on arXiv and Kaggle
-3. Train diverse baseline models
-4. Iteratively optimize with evidence-based decisions
-5. Export the best model with a full report
+That's it. GTD profiles your data, researches approaches, trains baselines, optimizes hyperparameters, and exports the best model.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/gtd:train` | Train and optimize a model on your dataset |
+| `/gtd:inference` | Run predictions on new data |
+| `/gtd:evaluate` | Evaluate model on labeled test data |
+| `/gtd:models` | List all trained models |
 
 ## How It Works
 
+GTD follows a 5-phase workflow, the same way a senior data scientist approaches a new problem:
+
 ```
-Claude Code → ML Optimizer Agent → MCP Tools
-                                    ├── Data Analysis (profile, detect issues, correlations)
-                                    ├── Model Training (train, evaluate, compare, export)
-                                    └── Research (arXiv, Kaggle, Papers with Code)
+1. Data Understanding    Profile distributions, detect issues, compute correlations
+        |
+2. Research              Search arXiv, Kaggle, Papers with Code for similar problems
+        |
+3. Baselines             Train 2-3 diverse models with default parameters
+        |
+4. Optimization          Iteratively tune hyperparameters with evidence-based decisions
+        |
+5. Export & Report       Save best model, generate visualizations, summarize findings
 ```
 
-The plugin provides:
-- **3 MCP servers** with 20+ specialized ML tools
-- **1 agent definition** with a structured optimization workflow
-- **14 supported models** across classification and regression
+Every decision is justified. The agent explains why it picked XGBoost over Random Forest, why it lowered the learning rate, and when to stop.
+
+## What Sets This Apart
+
+Traditional AutoML treats hyperparameter tuning as a pure search problem. GTD uses an LLM agent that:
+
+- **Analyzes data first** — profiles distributions, detects class imbalance, finds leakage before training
+- **Researches what works** — searches arXiv and Kaggle for approaches that succeed on similar data
+- **Makes informed decisions** — selects models based on data characteristics, not queue order
+- **Explains everything** — every choice is justified with evidence
+- **Knows when to stop** — convergence detection based on diminishing returns
 
 ## Supported Models
 
@@ -73,16 +79,16 @@ The plugin provides:
 ### Regression
 All tree-based models above plus Linear Regression, ElasticNet, SVR, KNN Regressor, MLP Regressor.
 
-## MCP Tools
+## MCP Tools Reference
 
-### Data Analysis (`bbopt-data`)
+### Data Analysis (`gtd-data`)
 - `profile_dataset` — Shape, distributions, missing values, class balance, outliers
 - `get_column_stats` — Deep dive into a single column
 - `detect_data_issues` — Class imbalance, multicollinearity, data leakage, high cardinality
 - `compute_correlations` — Feature-target and feature-feature correlations
 - `preview_data` — Quick data preview
 
-### Model Training (`bbopt-training`)
+### Model Training (`gtd-training`)
 - `train_model` — Cross-validated training with any supported model
 - `evaluate_model` — Full metrics (accuracy, F1, ROC-AUC, confusion matrix, etc.)
 - `get_feature_importance` — Built-in or permutation importance with plots
@@ -92,109 +98,56 @@ All tree-based models above plus Linear Regression, ElasticNet, SVR, KNN Regress
 - `export_model` — Save best model for deployment
 - `predict` — Score new data
 - `get_optimization_history` — Full run history
+- `list_available_models` — All supported models and hyperparameter spaces
+- `register_model` / `list_registered_models` — Model registry management
 
-### Research (`bbopt-research`)
+### Research (`gtd-research`)
 - `search_arxiv` — Find relevant ML papers
 - `search_kaggle_datasets` — Find similar datasets
 - `search_kaggle_notebooks` — Find winning competition solutions
 - `search_papers_with_code` — Find state-of-the-art methods
 
-## Agent Workflow
+## Examples
 
-The optimizer follows a 5-phase workflow:
+See the [examples/](examples/) directory for detailed walkthroughs:
 
-**Phase 1: Data Understanding** — Profile the dataset, identify quality issues, compute correlations
+- [Quick Start](examples/quick_start.md) — End-to-end optimization in 5 minutes
+- [Binary Classification](examples/binary_classification.md) — Churn prediction with class imbalance
+- [Regression](examples/regression.md) — House price prediction
 
-**Phase 2: Research & Strategy** — Search literature for what works on similar data, formulate a strategy
-
-**Phase 3: Baselines** — Train 2-3 diverse models with default parameters to establish a baseline
-
-**Phase 4: Iterative Optimization** — Tune hyperparameters, try different models, engineer features. Each decision is justified by evidence from previous runs.
-
-**Phase 5: Final Report** — Select best model, generate visualizations (ROC, PR, SHAP), export model, summarize findings
-
-Convergence: stops when target metric is met, no improvement >0.5% for 3 consecutive runs, or budget (20 runs) is exhausted.
-
-## Installation
+## Alternative Installation
 
 ### From PyPI
 
 ```bash
-pip install agent-driven-bbopt
-bbopt setup
+pip install get-training-done
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/yuvalshalev/agent-driven-bb-optimization.git
-cd agent-driven-bb-optimization
+git clone https://github.com/yuvalshalev/get-training-done.git
+cd get-training-done
 pip install -e ".[dev]"
-bbopt setup
 ```
-
-### Manual Setup
-
-If you prefer to configure Claude Code manually, add to `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "bbopt-data": {
-      "command": "python",
-      "args": ["-m", "bbopt.servers.data_server"]
-    },
-    "bbopt-training": {
-      "command": "python",
-      "args": ["-m", "bbopt.servers.training_server"]
-    },
-    "bbopt-research": {
-      "command": "python",
-      "args": ["-m", "bbopt.servers.research_server"]
-    }
-  }
-}
-```
-
-And copy `src/bbopt/agents/ml-optimizer.md` to `~/.claude/agents/`.
 
 ## Development
 
 ```bash
-# Install in dev mode
+# Install dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
 pytest tests/ -v
 
 # Run with coverage
-pytest tests/ --cov=bbopt --cov-report=term-missing
+pytest tests/ --cov=gtd --cov-report=term-missing
+
+# Lint
+ruff check src/ tests/
 ```
 
-## Project Structure
-
-```
-src/bbopt/
-├── cli.py                    # `bbopt setup` CLI
-├── servers/
-│   ├── data_server.py        # MCP: data analysis tools
-│   ├── training_server.py    # MCP: model training/eval tools
-│   └── research_server.py    # MCP: arXiv/Kaggle/PwC search
-├── core/
-│   ├── data_profiler.py      # Statistical analysis engine
-│   ├── feature_engine.py     # Feature engineering operations
-│   ├── model_registry.py     # 14 models with hyperparameter spaces
-│   ├── trainer.py            # Training loop with cross-validation
-│   ├── evaluator.py          # Metrics, curves, feature importance
-│   ├── exporter.py           # Model serialization
-│   └── workspace.py          # Session filesystem manager
-├── research/
-│   ├── arxiv_client.py       # arXiv API
-│   ├── kaggle_client.py      # Kaggle API
-│   └── pwc_client.py         # Papers with Code API
-└── agents/
-    └── ml-optimizer.md       # Agent definition
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 
 ## License
 

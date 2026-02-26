@@ -9,9 +9,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from bbopt.core import evaluator, feature_engine, model_registry, trainer, workspace
+from gtd.core import evaluator, feature_engine, model_registry, registry, trainer, workspace
 
-mcp = FastMCP("bbopt-training")
+mcp = FastMCP("gtd-training")
 
 
 # ─── Training ─────────────────────────────────────────────────────────────────
@@ -285,6 +285,84 @@ def list_available_models(
     try:
         result = model_registry.list_available_models(task_type=task_type)
         return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+# ─── Model State Registry ────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def register_model(
+    workspace_path: str,
+    best_run_id: str,
+    best_score: float,
+    primary_metric: str,
+    model_type: str,
+    task_type: str,
+    target_column: str,
+    data_path: str,
+    export_path: str,
+    total_runs: int,
+    registry_path: str = ".gtd-state.json",
+) -> str:
+    """Register a trained model in the local registry.
+
+    Appends a new entry to .gtd-state.json with an auto-incremented ID
+    and sets it as the current best model.
+
+    Args:
+        workspace_path: Path to the training workspace directory.
+        best_run_id: ID of the best training run.
+        best_score: Best cross-validation score achieved.
+        primary_metric: Metric used for optimization (e.g. 'accuracy', 'f1_macro').
+        model_type: Model name (e.g. 'lightgbm', 'xgboost').
+        task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+        target_column: Name of the target column.
+        data_path: Path to the original training data.
+        export_path: Path to the exported model directory.
+        total_runs: Total number of training runs performed.
+        registry_path: Path to the registry JSON file (default: .gtd-state.json).
+
+    Returns:
+        JSON string with the new registry entry including its assigned ID.
+    """
+    try:
+        result = registry.register_model(
+            registry_path=registry_path,
+            workspace_path=workspace_path,
+            best_run_id=best_run_id,
+            best_score=best_score,
+            primary_metric=primary_metric,
+            model_type=model_type,
+            task_type=task_type,
+            target_column=target_column,
+            data_path=data_path,
+            export_path=export_path,
+            total_runs=total_runs,
+        )
+        return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def list_registered_models(
+    registry_path: str = ".gtd-state.json",
+) -> str:
+    """List all models in the local registry.
+
+    Args:
+        registry_path: Path to the registry JSON file (default: .gtd-state.json).
+
+    Returns:
+        JSON string with current_best ID and list of all registered models.
+    """
+    try:
+        result = registry.list_models(registry_path=registry_path)
+        return json.dumps(result, default=str)
+    except FileNotFoundError:
+        return json.dumps({"current_best": None, "models": []})
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 
