@@ -102,3 +102,7 @@ def _to_json(data: dict[str, Any]) -> str:
         Formatted JSON string.
     """
     return json.dumps(data, indent=2, default=str)
+
+
+if __name__ == "__main__":
+    mcp.run()

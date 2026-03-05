@@ -3,12 +3,14 @@
 __pycache__/
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
 dist/
 build/
 *.pyc
 
 # Runtime artifacts
-gtd_workspace_*/
+gtd_workspace*/
+catboost_info/
 .gtd-state.json
 *.joblib
 
@@ -18,6 +20,9 @@ gtd_workspace_*/
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Lock files
 uv.lock

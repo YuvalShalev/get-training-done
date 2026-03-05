@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-import shutil
-from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from gtd.core import evaluator, feature_engine, model_registry, registry, trainer, workspace
+from gtd.core import evaluator, feature_engine, meta_learner, model_registry, registry, run_analyzer, trainer, workspace
 
 mcp = FastMCP("gtd-training")
 
@@ -28,8 +26,13 @@ def train_model(
     task_type: str,
     cv_folds: int = 5,
     random_state: int = 42,
+    memory_dir: str = "",
 ) -> str:
     """Train a model with cross-validation and save to the workspace.
+
+    Automatically logs each run and includes score trajectory in the response.
+    On the first call, computes a dataset fingerprint and (if memory_dir is
+    provided) surfaces strategy recommendations from past sessions.
 
     Args:
         workspace_path: Path to the workspace directory.
@@ -41,9 +44,11 @@ def train_model(
         task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
         cv_folds: Number of cross-validation folds (default 5).
         random_state: Random seed (default 42).
+        memory_dir: Path to auto-memory directory for automatic strategy matching.
 
     Returns:
-        JSON string with run_id, cv_scores, mean_score, std_score, training_time, model_path.
+        JSON string with run_id, cv_scores, mean_score, std_score, training_time,
+        model_path, run_number, score_trajectory, and optionally strategy_recommendation.
     """
     try:
         result = trainer.train_model(
@@ -56,6 +61,7 @@ def train_model(
             task_type=task_type,
             cv_folds=cv_folds,
             random_state=random_state,
+            memory_dir=memory_dir,
         )
         return json.dumps(result, default=str)
     except Exception as exc:
@@ -246,6 +252,106 @@ def compare_runs(
 
 
 @mcp.tool()
+def analyze_errors(
+    workspace_path: str,
+    run_id: str,
+    data_path: str,
+    target_column: str,
+    task_type: str,
+) -> str:
+    """Analyze model errors by feature segment to find where the model fails.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        run_id: ID of the training run to analyze.
+        data_path: Path to the CSV data file.
+        target_column: Name of the target column.
+        task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+
+    Returns:
+        JSON string with error_by_segment, confusion_patterns, confidence_analysis
+        (classification) or residual_stats (regression).
+    """
+    try:
+        result = run_analyzer.analyze_errors(
+            workspace_path=workspace_path,
+            run_id=run_id,
+            data_path=data_path,
+            target_column=target_column,
+            task_type=task_type,
+        )
+        return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def identify_segments(
+    workspace_path: str,
+    run_id: str,
+    data_path: str,
+    target_column: str,
+    task_type: str,
+    threshold_pct: float = 5.0,
+) -> str:
+    """Identify high-performing and low-performing data segments.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        run_id: ID of the training run.
+        data_path: Path to the CSV data file.
+        target_column: Name of the target column.
+        task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+        threshold_pct: Minimum percentage difference to flag a segment (default 5.0).
+
+    Returns:
+        JSON string with overall_metric, high_performing, and low_performing segments.
+    """
+    try:
+        result = run_analyzer.identify_segments(
+            workspace_path=workspace_path,
+            run_id=run_id,
+            data_path=data_path,
+            target_column=target_column,
+            task_type=task_type,
+            threshold_pct=threshold_pct,
+        )
+        return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def test_significance(
+    cv_scores_a: list[float],
+    cv_scores_b: list[float],
+    alpha: float = 0.05,
+) -> str:
+    """Test whether two sets of CV scores differ significantly.
+
+    Uses the Wilcoxon signed-rank test for robustness with small sample sizes.
+
+    Args:
+        cv_scores_a: CV scores from run A.
+        cv_scores_b: CV scores from run B.
+        alpha: Significance level (default 0.05).
+
+    Returns:
+        JSON string with test_name, p_value, is_significant, mean_diff,
+        ci_lower, ci_upper, and recommendation.
+    """
+    try:
+        result = run_analyzer.test_significance(
+            cv_scores_a=cv_scores_a,
+            cv_scores_b=cv_scores_b,
+            alpha=alpha,
+        )
+        return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
 def get_optimization_history(
     workspace_path: str,
 ) -> str:
@@ -400,6 +506,149 @@ def engineer_features(
         return json.dumps({"error": str(exc)})
 
 
+# ─── Self-Improvement (Meta-Learning) ─────────────────────────────────────────
+
+
+@mcp.tool()
+def save_observation(
+    workspace_path: str,
+    run_number: int,
+    score_trajectory: list[dict[str, float]],
+    actions_taken: list[str],
+    diagnosis: str,
+    next_strategy: str,
+) -> str:
+    """Save a within-run observation during Phase 4 optimization.
+
+    Call this every 3 runs to record the agent's reflection on progress.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        run_number: Current optimization run number.
+        score_trajectory: List of {run_id: score} dicts so far.
+        actions_taken: Description of actions in the last batch of runs.
+        diagnosis: What's working, what's failing, and why.
+        next_strategy: What to try next based on the reflection.
+
+    Returns:
+        JSON string confirming the observation was saved.
+    """
+    try:
+        obs = meta_learner.create_observation(
+            run_number=run_number,
+            score_trajectory=score_trajectory,
+            actions_taken=actions_taken,
+            diagnosis=diagnosis,
+            next_strategy=next_strategy,
+        )
+        meta_learner.save_observation(workspace_path, obs)
+        return json.dumps({"status": "saved", "run_number": run_number})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def load_observations(workspace_path: str) -> str:
+    """Load all observations for the current workspace.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+
+    Returns:
+        JSON string with list of observation dicts.
+    """
+    try:
+        observations = meta_learner.load_observations(workspace_path)
+        return json.dumps({"observations": observations, "count": len(observations)})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def get_strategy_recommendation(
+    dataset_fingerprint: dict[str, Any],
+    memory_dir: str,
+) -> str:
+    """Match current dataset against proven strategies from past sessions.
+
+    Call this in Step 0 after profiling to find strategies that worked
+    on similar datasets.
+
+    Args:
+        dataset_fingerprint: Dict with size_class, task, feature_mix, issues.
+        memory_dir: Path to the auto-memory directory containing gtd-learnings.md.
+
+    Returns:
+        JSON string with matched strategies sorted by relevance.
+    """
+    try:
+        learnings = meta_learner.load_learnings(memory_dir)
+        matches = meta_learner.match_strategies(dataset_fingerprint, learnings)
+        return json.dumps({
+            "matches": matches,
+            "count": len(matches),
+            "has_recommendations": len(matches) > 0,
+        })
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def record_session_metrics(
+    memory_dir: str,
+    dataset_name: str,
+    task_type: str,
+    final_score: float,
+    metric_name: str,
+    total_runs: int,
+    runs_to_best: int,
+    best_model: str,
+    total_tool_calls: int,
+) -> str:
+    """Record session performance metrics for prompt evolution tracking.
+
+    Call this as the last step (Step 6) to record the three optimization
+    metrics: quality, efficiency, and token economy.
+
+    Args:
+        memory_dir: Path to the auto-memory directory.
+        dataset_name: Name/description of the dataset.
+        task_type: Classification or regression task type.
+        final_score: Best achieved score.
+        metric_name: Name of the primary metric.
+        total_runs: Total training runs in this session.
+        runs_to_best: Number of runs to reach the best score.
+        best_model: Model type that achieved the best score.
+        total_tool_calls: Total MCP tool calls in the session.
+
+    Returns:
+        JSON string confirming the metrics were recorded.
+    """
+    try:
+        composite = meta_learner.compute_composite_score(
+            quality=final_score,
+            runs_to_best=runs_to_best,
+            max_runs=max(total_runs, 1),
+            tool_calls=total_tool_calls,
+            max_tool_calls=max(total_tool_calls * 2, 100),
+        )
+        metrics = {
+            "dataset_name": dataset_name,
+            "task_type": task_type,
+            "final_score": final_score,
+            "metric_name": metric_name,
+            "total_runs": total_runs,
+            "runs_to_best": runs_to_best,
+            "best_model": best_model,
+            "total_tool_calls": total_tool_calls,
+            "composite_score": composite,
+        }
+        meta_learner.record_session_metrics(memory_dir, metrics)
+        return json.dumps({"status": "recorded", "composite_score": composite, **metrics})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
 # ─── Export ───────────────────────────────────────────────────────────────────
 
 
@@ -408,59 +657,36 @@ def export_model(
     workspace_path: str,
     run_id: str,
     export_name: str | None = None,
+    memory_dir: str = "",
 ) -> str:
     """Export a trained model to the workspace exports directory.
 
-    Copies model.joblib and a metadata JSON into exports/.
+    Copies model.joblib and a metadata JSON into exports/. When memory_dir
+    is provided, automatically saves learnings, updates the strategy library,
+    and records session metrics.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run to export.
         export_name: Optional custom name for the export directory.
                      Defaults to the run_id.
+        memory_dir: Path to auto-memory directory for automatic learning saves.
 
     Returns:
-        JSON string with export_path, model_path, and metadata_path.
+        JSON string with export_path, model_path, metadata_path, and optionally
+        learning_saved and composite_score.
     """
     try:
-        ws = Path(workspace_path)
-        run_dir = ws / "runs" / run_id
-        model_src = run_dir / "model.joblib"
-
-        if not model_src.exists():
-            raise FileNotFoundError(f"Model not found at {model_src}")
-
-        name = export_name or run_id
-        export_dir = ws / "exports" / name
-        export_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy model
-        model_dest = export_dir / "model.joblib"
-        shutil.copy2(str(model_src), str(model_dest))
-
-        # Build metadata
-        config_path = run_dir / "config.json"
-        metrics_path = run_dir / "metrics.json"
-
-        metadata: dict[str, Any] = {"run_id": run_id, "export_name": name}
-        if config_path.exists():
-            import json as _json
-            with open(config_path) as f:
-                metadata["config"] = _json.load(f)
-        if metrics_path.exists():
-            import json as _json
-            with open(metrics_path) as f:
-                metadata["metrics"] = _json.load(f)
-
-        metadata_dest = export_dir / "metadata.json"
-        with open(metadata_dest, "w") as f:
-            json.dump(metadata, f, indent=2, default=str)
-
-        result = {
-            "export_path": str(export_dir),
-            "model_path": str(model_dest),
-            "metadata_path": str(metadata_dest),
-        }
-        return json.dumps(result)
+        result = trainer.export_model(
+            workspace_path=workspace_path,
+            run_id=run_id,
+            export_name=export_name,
+            memory_dir=memory_dir,
+        )
+        return json.dumps(result, default=str)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
+
+
+if __name__ == "__main__":
+    mcp.run()

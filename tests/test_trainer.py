@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from gtd.core import workspace
-from gtd.core.trainer import predict, train_model
+from gtd.core.trainer import (
+    _discover_memory_dir,
+    _store_memory_dir,
+    export_model,
+    predict,
+    train_model,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -290,3 +297,108 @@ class TestPredict:
                 run_id="nonexistent_run",
                 test_data_path=str(data_path),
             )
+
+
+# ---------------------------------------------------------------------------
+# Memory dir auto-discovery
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryDirDiscovery:
+    """Tests for _store_memory_dir and _discover_memory_dir."""
+
+    def test_store_and_discover_round_trip(self, tmp_path: Path) -> None:
+        mem_dir = tmp_path / "memory"
+        mem_dir.mkdir()
+        ws_dir = tmp_path / "workspace"
+        ws_dir.mkdir()
+
+        _store_memory_dir(str(ws_dir), str(mem_dir))
+        assert _discover_memory_dir(str(ws_dir)) == str(mem_dir)
+
+    def test_discover_returns_empty_when_nothing_available(
+        self, tmp_path: Path
+    ) -> None:
+        ws_dir = tmp_path / "workspace"
+        ws_dir.mkdir()
+        assert _discover_memory_dir(str(ws_dir)) == ""
+
+    def test_discover_ignores_stale_path(self, tmp_path: Path) -> None:
+        ws_dir = tmp_path / "workspace"
+        ws_dir.mkdir()
+        _store_memory_dir(str(ws_dir), "/nonexistent/dir")
+        assert _discover_memory_dir(str(ws_dir)) == ""
+
+    def test_discover_falls_back_to_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ws_dir = tmp_path / "workspace"
+        ws_dir.mkdir()
+        env_mem = tmp_path / "env_memory"
+        env_mem.mkdir()
+
+        monkeypatch.setenv("CLAUDE_AUTO_MEMORY_DIR", str(env_mem))
+        assert _discover_memory_dir(str(ws_dir)) == str(env_mem)
+
+    def test_workspace_metadata_takes_precedence_over_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ws_dir = tmp_path / "workspace"
+        ws_dir.mkdir()
+        ws_mem = tmp_path / "ws_memory"
+        ws_mem.mkdir()
+        env_mem = tmp_path / "env_memory"
+        env_mem.mkdir()
+
+        _store_memory_dir(str(ws_dir), str(ws_mem))
+        monkeypatch.setenv("CLAUDE_AUTO_MEMORY_DIR", str(env_mem))
+        assert _discover_memory_dir(str(ws_dir)) == str(ws_mem)
+
+    def test_train_model_persists_memory_dir(self, iris_workspace) -> None:
+        ws_path, data_path = iris_workspace
+        mem_dir = ws_path.parent / "memory"
+        mem_dir.mkdir()
+
+        train_model(
+            workspace_path=str(ws_path),
+            data_path=str(data_path),
+            model_type="random_forest",
+            hyperparameters=SMALL_RF_PARAMS,
+            feature_columns=IRIS_FEATURES,
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+            cv_folds=2,
+            memory_dir=str(mem_dir),
+        )
+
+        assert _discover_memory_dir(str(ws_path)) == str(mem_dir)
+
+    def test_export_model_auto_discovers_memory_dir(
+        self, iris_workspace
+    ) -> None:
+        ws_path, data_path = iris_workspace
+        mem_dir = ws_path.parent / "memory"
+        mem_dir.mkdir()
+
+        # Train with memory_dir (persists it)
+        result = train_model(
+            workspace_path=str(ws_path),
+            data_path=str(data_path),
+            model_type="random_forest",
+            hyperparameters=SMALL_RF_PARAMS,
+            feature_columns=IRIS_FEATURES,
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+            cv_folds=2,
+            memory_dir=str(mem_dir),
+        )
+
+        # Export WITHOUT memory_dir — should auto-discover it
+        export_result = export_model(
+            workspace_path=str(ws_path),
+            run_id=result["run_id"],
+        )
+
+        # learning_saved should be True or False (not absent),
+        # meaning auto-discovery was attempted
+        assert "learning_saved" in export_result

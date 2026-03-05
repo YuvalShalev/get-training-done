@@ -60,6 +60,50 @@ def evaluate_model(
     return metrics
 
 
+def error_analysis(
+    workspace_path: str,
+    run_id: str,
+    data_path: str,
+    target_column: str,
+    task_type: str,
+) -> dict[str, Any]:
+    """Run error analysis on a trained model, combining feature importance with segment errors.
+
+    Gets top 5 features by importance, then delegates to run_analyzer.analyze_errors.
+    Saves the result as an artifact.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        run_id: ID of the training run to analyze.
+        data_path: Path to the CSV data file.
+        target_column: Name of the target column.
+        task_type: Task type string.
+
+    Returns:
+        Error analysis dict from run_analyzer.analyze_errors.
+    """
+    from gtd.core import run_analyzer
+
+    # Get top features via importance
+    imp_result = get_feature_importance(workspace_path, run_id, data_path, target_column)
+    top_features = sorted(
+        imp_result["importances"].items(), key=lambda x: x[1], reverse=True,
+    )[:5]
+    top_feature_names = [f[0] for f in top_features]
+
+    result = run_analyzer.analyze_errors(
+        workspace_path=workspace_path,
+        run_id=run_id,
+        data_path=data_path,
+        target_column=target_column,
+        task_type=task_type,
+        top_features=top_feature_names,
+    )
+
+    workspace.save_run_artifact(workspace_path, run_id, "error_analysis.json", result)
+    return result
+
+
 def get_feature_importance(
     workspace_path: str,
     run_id: str,
@@ -367,7 +411,8 @@ def _load_run_context(
     if not source.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
 
-    df = pd.read_csv(source)
+    from gtd.core.data_profiler import load_csv
+    df = load_csv(str(source))
     missing_features = [c for c in feature_columns if c not in df.columns]
     if missing_features:
         raise ValueError(f"Feature columns missing from data: {missing_features}")

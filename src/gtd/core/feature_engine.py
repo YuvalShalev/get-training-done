@@ -36,7 +36,8 @@ def engineer_features(
     if not source.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
 
-    df = pd.read_csv(source)
+    from gtd.core.data_profiler import load_csv
+    df = load_csv(str(source))
     applied: list[str] = []
 
     for op in operations:
@@ -81,7 +82,8 @@ def auto_preprocess(
     if not source.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
 
-    df = pd.read_csv(source)
+    from gtd.core.data_profiler import load_csv
+    df = load_csv(str(source))
 
     if target_column not in df.columns:
         raise ValueError(f"Target column '{target_column}' not found in data")

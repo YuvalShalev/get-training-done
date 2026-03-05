@@ -22,7 +22,7 @@ def profile_dataset(path: str, target_column: str, task_type: str = "auto") -> d
         Dict with shape, dtypes, distributions, missing info, feature types,
         class balance, preprocessing recommendations, outlier counts, and cardinality.
     """
-    df = _load_csv(path)
+    df = load_csv(path)
     _validate_column_exists(df, target_column)
 
     resolved_task = _resolve_task_type(df, target_column, task_type)
@@ -69,7 +69,7 @@ def get_column_stats(path: str, column: str) -> dict[str, Any]:
     Returns:
         Dict with distribution stats, unique count, missing %, dtype, and is_numeric flag.
     """
-    df = _load_csv(path)
+    df = load_csv(path)
     _validate_column_exists(df, column)
 
     series = df[column]
@@ -126,7 +126,7 @@ def detect_data_issues(path: str, target_column: str) -> dict[str, Any]:
         constant features, near-constant features, leakage suspects, and
         missing-heavy columns.
     """
-    df = _load_csv(path)
+    df = load_csv(path)
     _validate_column_exists(df, target_column)
 
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
@@ -191,7 +191,7 @@ def compute_correlations(
         Dict with feature-target correlations, top correlated pairs,
         and the full correlation matrix as nested dicts.
     """
-    df = _load_csv(path)
+    df = load_csv(path)
     _validate_column_exists(df, target_column)
 
     if method not in ("pearson", "spearman", "kendall"):
@@ -255,7 +255,7 @@ def preview_data(path: str, n_rows: int = 5) -> dict[str, Any]:
     Returns:
         Dict with rows (list of dicts), dtypes, shape, and column names.
     """
-    df = _load_csv(path)
+    df = load_csv(path)
     preview_df = df.head(n_rows)
 
     rows = _dataframe_to_native_records(preview_df)
@@ -271,14 +271,24 @@ def preview_data(path: str, n_rows: int = 5) -> dict[str, Any]:
 # ─── Private Helpers ──────────────────────────────────────────────────────────
 
 
-def _load_csv(path: str) -> pd.DataFrame:
-    """Load a CSV file with basic validation."""
+def load_csv(path: str) -> pd.DataFrame:
+    """Load a CSV file with auto-detected separator and encoding."""
     filepath = Path(path)
     if not filepath.exists():
         raise FileNotFoundError(f"File not found: {path}")
     if not filepath.suffix.lower() == ".csv":
         raise ValueError(f"Expected a CSV file, got: {filepath.suffix}")
-    return pd.read_csv(filepath)
+    # Detect separator from first line (latin-1 always succeeds)
+    sample = filepath.read_bytes()[:4096].decode("latin-1")
+    first_line = sample.split("\n")[0]
+    sep = ";" if first_line.count(";") > first_line.count(",") else ","
+    # Try utf-8 first, fall back to latin-1
+    for encoding in ["utf-8", "latin-1"]:
+        try:
+            return pd.read_csv(filepath, sep=sep, encoding=encoding, low_memory=False)
+        except UnicodeDecodeError:
+            continue
+    return pd.read_csv(filepath, sep=sep, encoding="latin-1")
 
 
 def _validate_column_exists(df: pd.DataFrame, column: str) -> None:

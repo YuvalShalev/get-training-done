@@ -9,6 +9,7 @@ import pytest
 from gtd.core import workspace
 from gtd.core.evaluator import (
     compare_runs,
+    error_analysis,
     evaluate_model,
     get_feature_importance,
     get_optimization_history,
@@ -173,6 +174,63 @@ class TestEvaluateModel:
         run_meta = workspace.get_run_metadata(ws_path, run_id)
         assert run_meta is not None
         assert "accuracy" in run_meta["metrics"]
+
+
+# ---------------------------------------------------------------------------
+# error_analysis
+# ---------------------------------------------------------------------------
+
+
+class TestErrorAnalysis:
+    """Tests for error_analysis wrapper."""
+
+    def test_returns_result(self, trained_iris) -> None:
+        ws_path, run_id, data_path = trained_iris
+        result = error_analysis(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+            data_path=str(data_path),
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+        )
+        assert "error_by_segment" in result
+
+    def test_saves_artifact(self, trained_iris) -> None:
+        ws_path, run_id, data_path = trained_iris
+        error_analysis(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+            data_path=str(data_path),
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+        )
+        artifact_path = ws_path / "runs" / run_id / "error_analysis.json"
+        assert artifact_path.exists()
+
+    def test_uses_top_features_from_importance(self, trained_iris) -> None:
+        ws_path, run_id, data_path = trained_iris
+        result = error_analysis(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+            data_path=str(data_path),
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+        )
+        # Segments should reference iris features
+        features_in_result = {s["feature"] for s in result["error_by_segment"]}
+        assert features_in_result.issubset(set(IRIS_FEATURES))
+
+    def test_returns_overall_error_rate(self, trained_iris) -> None:
+        ws_path, run_id, data_path = trained_iris
+        result = error_analysis(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+            data_path=str(data_path),
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+        )
+        assert "overall_error_rate" in result
+        assert 0.0 <= result["overall_error_rate"] <= 1.0
 
 
 # ---------------------------------------------------------------------------
