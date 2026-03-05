@@ -18,13 +18,15 @@ You MUST follow ALL of these. Violations are unacceptable:
 5. **Compact output**: Single-line formats. No tables unless the user asks for one.
 6. **No reasoning before decisions**. Act, then report the result in one line.
 
-## Self-Learning (Automatic)
+## Self-Learning
 
-Learning happens automatically via two parameters — no extra tool calls needed:
+Learning happens at three levels:
 
-- **`memory_dir`**: Pass your auto-memory directory path (shown in your system prompt under "persistent auto memory directory at") to `train_model` on the FIRST call. This persists it in the workspace so `export_model` auto-discovers it — no need to pass it again.
-- `train_model` with `memory_dir` automatically: stores a dataset fingerprint, surfaces strategy recommendations from past sessions, and includes score trajectory in every response.
-- `export_model` automatically discovers `memory_dir` from the workspace (set by `train_model`) and saves learnings to `gtd-learnings.md`, updates `gtd-strategy-library.md`, and records session metrics to `gtd-meta-scores.jsonl`.
+- **Automatic**: `train_model` with `memory_dir` stores dataset fingerprints and surfaces past strategy recommendations. `export_model` auto-discovers `memory_dir` and saves learnings, updates strategy library, and records session metrics.
+- **Within-run reflection**: Call `save_observation` every 3 optimization runs in Phase 4 to record what's working and what to try next. Future sessions can query these via `load_observations`.
+- **Passive extraction**: At session end, transcript-level pattern detectors extract model insights, HP discoveries, and data handling patterns into `~/.claude/rules/learned-patterns.md` (automatic, no action needed).
+
+**`memory_dir`**: Pass your auto-memory directory path to `train_model` on the FIRST call. This persists it so `export_model` auto-discovers it later.
 
 ## Argument Parsing
 
@@ -196,6 +198,18 @@ Print the reason on one line.
 
 **CONTEXT RULE (every 3 runs)**: Compact runs older than the 3 most recent into a single line: `Runs {start}-{end}: best was #{n} at {score} ({model})`. From this point forward, reference ONLY that summary for older runs. Do NOT repeat their individual run details.
 
+#### Step 5: Reflect (every 3 optimization runs)
+
+Every 3 optimization runs, call `save_observation` (gtd-training server) with:
+- `workspace_path`: current workspace
+- `run_number`: current run number
+- `score_trajectory`: the trajectory from the last `train_model` response
+- `actions_taken`: list of changes made in the last 3 runs (e.g., `["lr=0.05", "depth=8", "switched to LightGBM"]`)
+- `diagnosis`: one sentence — what's working and what's not
+- `next_strategy`: what you plan to try next and why
+
+This is mandatory. Do not skip it.
+
 ---
 
 ## Phase 5: Export & Report
@@ -203,6 +217,7 @@ Print the reason on one line.
 Print: `## Phase 5: Export & Report`
 
 1. Identify the best run based on the primary metric
+1.5. Call `load_observations` to retrieve within-run reflections from Phase 4. Use these to enrich the optimization summary with key strategy shifts and diagnoses.
 2. Call `export_model` (gtd-training server) with the best run ID. It auto-discovers `memory_dir` from the workspace, so learnings are saved automatically.
 3. Call `evaluate_model` for final comprehensive metrics
 4. Call `get_feature_importance` on the best run
