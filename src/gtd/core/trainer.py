@@ -196,6 +196,12 @@ def train_model(
                 matches = meta_learner.match_strategies(fingerprint, learnings)
                 if matches:
                     result["strategy_recommendation"] = matches[:2]
+
+            # E. Load prior knowledge from past sessions
+            if memory_dir:
+                prior_knowledge = meta_learner.load_prior_knowledge(memory_dir)
+                if prior_knowledge:
+                    result["prior_knowledge"] = prior_knowledge
         except Exception as exc:
             logger.warning("Side effect (fingerprint/strategy) failed: %s", exc)
 

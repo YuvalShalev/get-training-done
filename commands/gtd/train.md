@@ -17,6 +17,7 @@ You MUST follow ALL of these. Violations are unacceptable:
 4. **Never use AskUserQuestion tool** during this workflow. All communication is plain text.
 5. **Compact output**: Single-line formats. No tables unless the user asks for one.
 6. **No reasoning before decisions**. Act, then report the result in one line.
+7. **Session synthesis is mandatory**. You MUST call `synthesize_session` before `register_model` in Phase 5. `register_model` will reject if you skip this.
 
 ## Self-Learning
 
@@ -25,6 +26,7 @@ Learning happens at three levels:
 - **Automatic**: `train_model` with `memory_dir` stores dataset fingerprints and surfaces past strategy recommendations. `export_model` auto-discovers `memory_dir` and saves learnings, updates strategy library, and records session metrics.
 - **Within-run reflection**: Call `save_observation` every 3 optimization runs in Phase 4 to record what's working and what to try next. Future sessions can query these via `load_observations`.
 - **Passive extraction**: At session end, transcript-level pattern detectors extract model insights, HP discoveries, and data handling patterns into `~/.claude/rules/learned-patterns.md` (automatic, no action needed).
+- **Long-term knowledge**: `train_model` (first call) returns `prior_knowledge` from past sessions. `synthesize_session` saves your insights to `high-level-observations.md` and archives the observation log.
 
 **`memory_dir`**: Pass your auto-memory directory path to `train_model` on the FIRST call. This persists it so `export_model` auto-discovers it later.
 
@@ -95,6 +97,8 @@ Print: `Training 3 baselines...`
    - A simple model (`logistic_regression` for classification, `linear_regression` for regression)
 
 If the first `train_model` response includes `strategy_recommendation`, use those strategies as starting points in Phase 4 instead of defaults.
+
+If the first `train_model` response includes `prior_knowledge`, read it carefully. This contains synthesized insights from past sessions. Use these to inform your model selection and hyperparameter choices throughout Phase 4.
 
 After all 3, print a compact one-line summary:
 
@@ -222,7 +226,12 @@ Print: `## Phase 5: Export & Report`
 3. Call `evaluate_model` for final comprehensive metrics
 4. Call `get_feature_importance` on the best run
 5. Call `get_roc_curve` (for binary classification) and `get_pr_curve` (for classification tasks)
-6. Call `register_model` (gtd-training server) to add this training session to the `.gtd-state.json` registry
+6. Call `synthesize_session` (gtd-training server) with:
+   - `workspace_path`: current workspace
+   - `dataset_name`: the dataset filename
+   - `task_type`: the detected task type
+   - `synthesis`: Write a concise paragraph (3-5 sentences) synthesizing **general knowledge** gained. Focus on: which model families worked and why, effective hyperparameter ranges, strategies that failed, and data-specific insights. Extract transferable patterns, not a run log summary.
+7. Call `register_model` (gtd-training server) to add this training session to the `.gtd-state.json` registry
 
 Print a compact final report:
 

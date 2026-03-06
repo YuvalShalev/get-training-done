@@ -54,6 +54,8 @@ Call `evaluate_model` (gtd-training server) with:
 
 This returns comprehensive metrics.
 
+If the `evaluate_model` response includes `prior_knowledge`, use these past insights to contextualize the evaluation results (e.g., known model weaknesses, expected ranges).
+
 ---
 
 ## Step 3: Generate Visualizations
@@ -130,3 +132,13 @@ Print the evaluation report:
 - Where the model is making mistakes (analyze confusion matrix or residuals)
 - Suggestions for improvement (more data, feature engineering, different models)
 ```
+
+---
+
+## Step 5: Synthesize Evaluation Insights
+
+Call `synthesize_session` (gtd-training server) with:
+- `workspace_path`: from model entry
+- `dataset_name`: the evaluation data filename
+- `task_type`: from model entry
+- `synthesis`: Write 2-3 sentences on what this evaluation revealed about real-world performance — where the model excels, where it struggles, and what this suggests for future training.

@@ -641,3 +641,82 @@ def compute_composite_score(
     quality = max(0.0, min(1.0, quality))
 
     return 0.6 * quality + 0.25 * efficiency + 0.15 * economy
+
+
+# ─── Layer 4: Long-Term Knowledge ─────────────────────────────────────────────
+
+
+def load_prior_knowledge(memory_dir: str) -> str:
+    """Load synthesized high-level observations from past sessions.
+
+    Args:
+        memory_dir: Path to the auto-memory directory.
+
+    Returns:
+        Contents of ``high-level-observations.md``, or empty string if
+        the file doesn't exist.
+    """
+    obs_path = Path(memory_dir) / "high-level-observations.md"
+    if not obs_path.exists():
+        return ""
+    return obs_path.read_text(encoding="utf-8")
+
+
+def save_session_synthesis(
+    memory_dir: str,
+    dataset_name: str,
+    task_type: str,
+    synthesis: str,
+) -> None:
+    """Append a synthesized session entry to ``high-level-observations.md``.
+
+    Args:
+        memory_dir: Path to the auto-memory directory.
+        dataset_name: Name of the dataset used in the session.
+        task_type: Task type (e.g. 'binary_classification').
+        synthesis: LLM-generated synthesis paragraph.
+    """
+    obs_path = Path(memory_dir) / "high-level-observations.md"
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    entry = f"### {date} — {dataset_name} ({task_type})\n{synthesis}\n\n"
+
+    if not obs_path.exists():
+        header = "# High-Level Observations\n\n"
+        obs_path.write_text(header + entry, encoding="utf-8")
+    else:
+        with open(obs_path, "a", encoding="utf-8") as f:
+            f.write(entry)
+
+
+def archive_observation_log(workspace_path: str) -> str:
+    """Archive the current observation log and reset it.
+
+    If ``observation-log.md`` exists and has content beyond the header,
+    copies it to a timestamped archive file and resets the original.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+
+    Returns:
+        Archive filename if archived, empty string otherwise.
+    """
+    log_path = Path(workspace_path) / "observation-log.md"
+    if not log_path.exists():
+        return ""
+
+    content = log_path.read_text(encoding="utf-8")
+    # Check if there's content beyond just the header
+    stripped = content.replace("# Observation Log", "").strip()
+    if not stripped:
+        return ""
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    archive_name = f"observation-log-{timestamp}.md"
+    archive_path = Path(workspace_path) / archive_name
+    archive_path.write_text(content, encoding="utf-8")
+
+    # Reset original
+    log_path.write_text("# Observation Log\n\n", encoding="utf-8")
+
+    return archive_name

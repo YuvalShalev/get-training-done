@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from gtd.core import evaluator, feature_engine, meta_learner, model_registry, registry, run_analyzer, trainer, workspace
+from gtd.core.trainer import _discover_memory_dir
 
 mcp = FastMCP("gtd-training")
 
@@ -129,6 +131,14 @@ def evaluate_model(
             target_column=target_column,
             task_type=task_type,
         )
+
+        # Auto-load prior knowledge for the agent
+        memory_dir = _discover_memory_dir(workspace_path)
+        if memory_dir:
+            prior = meta_learner.load_prior_knowledge(memory_dir)
+            if prior:
+                result["prior_knowledge"] = prior
+
         return json.dumps(result, default=str)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
@@ -433,6 +443,14 @@ def register_model(
     Returns:
         JSON string with the new registry entry including its assigned ID.
     """
+    # Gate: require session synthesis before registration
+    flag = Path(workspace_path) / ".session_synthesized"
+    if not flag.exists():
+        return json.dumps({
+            "error": "Session synthesis required before registration. "
+            "Call synthesize_session first to save learnings to long-term memory."
+        })
+
     try:
         result = registry.register_model(
             registry_path=registry_path,
@@ -560,6 +578,56 @@ def load_observations(workspace_path: str) -> str:
     try:
         observations = meta_learner.load_observations(workspace_path)
         return json.dumps({"observations": observations, "count": len(observations)})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def synthesize_session(
+    workspace_path: str,
+    dataset_name: str,
+    task_type: str,
+    synthesis: str,
+) -> str:
+    """Save synthesized session knowledge and archive the observation log.
+
+    MUST be called before register_model. The synthesis should be a concise
+    paragraph of general, transferable insights — not a data dump.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        dataset_name: Name of the dataset (e.g. the CSV filename).
+        task_type: Task type (e.g. 'binary_classification').
+        synthesis: A concise paragraph (3-5 sentences) of general knowledge gained.
+
+    Returns:
+        JSON string with status and archive filename.
+    """
+    try:
+        memory_dir = _discover_memory_dir(workspace_path)
+        if not memory_dir:
+            return json.dumps({
+                "error": "Cannot discover memory_dir from workspace. "
+                "Ensure train_model was called with memory_dir first."
+            })
+
+        meta_learner.save_session_synthesis(
+            memory_dir, dataset_name, task_type, synthesis,
+        )
+        archive_name = meta_learner.archive_observation_log(workspace_path)
+
+        # Write flag so register_model knows synthesis happened
+        flag = Path(workspace_path) / ".session_synthesized"
+        from datetime import datetime, timezone
+        flag.write_text(
+            datetime.now(timezone.utc).isoformat(), encoding="utf-8",
+        )
+
+        return json.dumps({
+            "status": "saved",
+            "archived": archive_name,
+            "memory_dir": memory_dir,
+        })
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 
