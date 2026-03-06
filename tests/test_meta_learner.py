@@ -303,6 +303,13 @@ class TestExtractStrategySequence:
 
 
 class TestEnhancedLearnings:
+    @pytest.fixture(autouse=True)
+    def _isolate_global_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "gtd.core.meta_learner._GLOBAL_GTD_DIR",
+            tmp_path / "global_gtd",
+        )
+
     def test_save_and_load(self, tmp_path: Path):
         summary = {
             "date": "2026-02-28",
@@ -412,6 +419,13 @@ class TestEnhancedLearnings:
 
 
 class TestStrategyLibrary:
+    @pytest.fixture(autouse=True)
+    def _isolate_global_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "gtd.core.meta_learner._GLOBAL_GTD_DIR",
+            tmp_path / "global_gtd",
+        )
+
     def test_create_new(self, tmp_path: Path):
         fp = {"size_class": "medium", "task": "binary_classification", "feature_mix": "mixed"}
         strategy = {

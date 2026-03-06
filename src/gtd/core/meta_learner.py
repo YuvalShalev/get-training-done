@@ -361,8 +361,6 @@ def save_enhanced_learnings(memory_dir: str, session_summary: dict[str, Any]) ->
             strategy_sequence, score_trajectory, best_model, best_score,
             metric_name, insight, anti_pattern, hp_sweet_spot.
     """
-    learnings_path = Path(memory_dir) / "gtd-learnings.md"
-
     fp = session_summary.get("fingerprint", {})
     fp_str = (
         f"{fp.get('n_rows', '?')}x{fp.get('n_cols', '?')}, "
@@ -392,12 +390,14 @@ def save_enhanced_learnings(memory_dir: str, session_summary: dict[str, Any]) ->
     ]
     entry = "\n".join(entry_lines)
 
-    if not learnings_path.exists():
-        header = "# GTD Learnings\n\n"
-        learnings_path.write_text(header + entry, encoding="utf-8")
-    else:
-        with open(learnings_path, "a", encoding="utf-8") as f:
-            f.write(entry)
+    for learnings_path in [_GLOBAL_GTD_DIR / "gtd-learnings.md", Path(memory_dir) / "gtd-learnings.md"]:
+        learnings_path.parent.mkdir(parents=True, exist_ok=True)
+        if not learnings_path.exists():
+            header = "# GTD Learnings\n\n"
+            learnings_path.write_text(header + entry, encoding="utf-8")
+        else:
+            with open(learnings_path, "a", encoding="utf-8") as f:
+                f.write(entry)
 
 
 def load_learnings(memory_dir: str) -> dict[str, Any]:
@@ -410,11 +410,14 @@ def load_learnings(memory_dir: str) -> dict[str, Any]:
         Dict with ``entries`` (list of parsed learning dicts) and
         ``strategies`` (list extracted from entries for matching).
     """
-    learnings_path = Path(memory_dir) / "gtd-learnings.md"
-    if not learnings_path.exists():
-        return {"entries": [], "strategies": []}
-
-    text = learnings_path.read_text(encoding="utf-8")
+    global_path = _GLOBAL_GTD_DIR / "gtd-learnings.md"
+    if global_path.exists():
+        text = global_path.read_text(encoding="utf-8")
+    else:
+        learnings_path = Path(memory_dir) / "gtd-learnings.md"
+        if not learnings_path.exists():
+            return {"entries": [], "strategies": []}
+        text = learnings_path.read_text(encoding="utf-8")
     entries: list[dict[str, Any]] = []
     strategies: list[dict[str, Any]] = []
 
@@ -527,8 +530,6 @@ def update_strategy_library(
         fingerprint: Dataset fingerprint dict.
         strategy: Dict with proven_path, hp_starting_points, avoid, sessions_count.
     """
-    lib_path = Path(memory_dir) / "gtd-strategy-library.md"
-
     archetype = (
         f"{fingerprint.get('size_class', '?').title()} "
         f"{fingerprint.get('task', '?').replace('_', ' ')}, "
@@ -545,22 +546,24 @@ def update_strategy_library(
     ]
     entry = "\n".join(entry_lines)
 
-    if not lib_path.exists():
-        header = "# GTD Strategy Library\n\n"
-        lib_path.write_text(header + entry, encoding="utf-8")
-    else:
-        existing = lib_path.read_text(encoding="utf-8")
-        # Check if archetype section already exists and replace it
-        pattern = re.compile(
-            rf"## {re.escape(archetype)}\n(?:- .+\n)*\n?",
-            re.MULTILINE,
-        )
-        if pattern.search(existing):
-            updated = pattern.sub(entry, existing)
-            lib_path.write_text(updated, encoding="utf-8")
+    for lib_path in [_GLOBAL_GTD_DIR / "gtd-strategy-library.md", Path(memory_dir) / "gtd-strategy-library.md"]:
+        lib_path.parent.mkdir(parents=True, exist_ok=True)
+        if not lib_path.exists():
+            header = "# GTD Strategy Library\n\n"
+            lib_path.write_text(header + entry, encoding="utf-8")
         else:
-            with open(lib_path, "a", encoding="utf-8") as f:
-                f.write(entry)
+            existing = lib_path.read_text(encoding="utf-8")
+            # Check if archetype section already exists and replace it
+            pattern = re.compile(
+                rf"## {re.escape(archetype)}\n(?:- .+\n)*\n?",
+                re.MULTILINE,
+            )
+            if pattern.search(existing):
+                updated = pattern.sub(entry, existing)
+                lib_path.write_text(updated, encoding="utf-8")
+            else:
+                with open(lib_path, "a", encoding="utf-8") as f:
+                    f.write(entry)
 
 
 # ─── Layer 3: Session Metrics ────────────────────────────────────────────────
