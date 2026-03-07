@@ -12,9 +12,9 @@ You are running the **Get Training Done** workflow. Your job is to profile the d
 You MUST follow ALL of these. Violations are unacceptable:
 
 1. **Use MCP tools ONLY**. Call `profile_dataset`, `train_model`, `evaluate_model`, etc. via the gtd-data, gtd-training, and gtd-research MCP servers. NEVER fall back to writing Python code in Bash. If an MCP tool fails, report the error — do NOT reimplement it in Python.
-2. **Zero questions in Phases 2-5**. The only question is Phase 1 target confirmation.
-3. **Phase 1 confirmation**: Ask in plain text — "Target: `{target}`, task: {task_type}. Correct?" Do NOT use the AskUserQuestion tool.
-4. **Never use AskUserQuestion tool** during this workflow. All communication is plain text.
+2. **Zero questions in Phases 3-5**. Questions are only allowed in Phase 1 (target confirmation) and Phase 2 (research opt-in, credential setup).
+3. **All questions to the user MUST use the AskUserQuestion tool.** Never ask questions in plain text.
+4. **Phase 1 confirmation**: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?"
 5. **Compact output**: Single-line formats. No tables unless the user asks for one.
 6. **No reasoning before decisions**. Act, then report the result in one line.
 7. **Session synthesis is mandatory**. You MUST call `synthesize_session` before `register_model` in Phase 5. `register_model` will reject if you skip this.
@@ -61,7 +61,7 @@ Data: {rows} rows x {cols} cols | {task_type} | Target: {target}
 Features: {n_numeric} numeric, {n_categorical} categorical | Missing: {missing_summary} | Issues: {issues_summary}
 ```
 
-Confirmation: "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
+Confirmation: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
 
 **CONTEXT RULE**: From this point forward, reference ONLY the 2-line summary above. Do NOT repeat or include raw profiling JSON from this phase in any subsequent message.
 
@@ -93,7 +93,7 @@ Print: `Split: {strategy} | Train: {train_rows} rows | Validation: {val_rows} ro
 
 ## Phase 2: Research (Optional)
 
-Ask the user in plain text: "Run external research (arXiv + Kaggle)? Kaggle requires API credentials. (yes/no)"
+Use AskUserQuestion: "Run external research (arXiv + Kaggle)? Kaggle requires API credentials. (yes/no)"
 
 **If the user says no** (or any negative response): skip this phase entirely and proceed to Phase 3.
 
@@ -102,21 +102,32 @@ Ask the user in plain text: "Run external research (arXiv + Kaggle)? Kaggle requ
 Print: `## Phase 2: Research`
 Print: `Searching for approaches...`
 
+### Kaggle Credential Check
+
+Before calling Kaggle, check if credentials exist by calling `search_kaggle_notebooks` with a test query.
+
+**If Kaggle returns a credentials error** (the response contains `"error": "Kaggle credentials not found"` and a `"diagnosis"` field):
+
+1. Print the `diagnosis` message so the user can see exactly what's wrong.
+2. Use AskUserQuestion to ask:
+   "Kaggle credentials not found. Would you like me to create ~/.kaggle/kaggle.json for you?
+
+   You'll need your Kaggle username and API key from https://www.kaggle.com/settings → API → Create New Token.
+
+   Alternatively, you can set env vars: `export KAGGLE_USERNAME=... KAGGLE_KEY=...`
+
+   Options: (a) Create the file for me (b) Skip Kaggle research (c) I'll set it up myself"
+
+3. **If (a)**: Use AskUserQuestion to ask for their Kaggle username, then their API key. Create `~/.kaggle/kaggle.json` with the Write tool containing `{"username": "...", "key": "..."}`. Retry the Kaggle search.
+4. **If (b)**: Continue with arXiv only.
+5. **If (c)**: Continue with arXiv only — Kaggle will work next session.
+
+### Research Queries
+
 1. Call `search_arxiv` (gtd-research server) with a query describing the dataset characteristics — no credentials needed
-2. Call `search_kaggle_notebooks` with a query about similar datasets or problem types — requires Kaggle API credentials
+2. Call `search_kaggle_notebooks` with a query about similar datasets or problem types — requires Kaggle API credentials (skip if credentials unavailable per above)
 
-If either call returns an error (e.g., missing Kaggle credentials, network timeout), print the error on one line and continue with whatever results you got. Do NOT retry or block on research failures.
-
-**If Kaggle fails with a credentials error**, tell the user exactly this:
-
-```
-Kaggle credentials not found. To enable Kaggle research in future sessions:
-1. Go to https://www.kaggle.com/settings → API section
-2. Copy your username and create a new API token
-3. Create the file ~/.kaggle/kaggle.json with:
-   {"username": "YOUR_USERNAME", "key": "YOUR_TOKEN"}
-That's it — next time Kaggle research will work automatically.
-```
+If either call returns a non-credential error (network timeout, HTTP error), print the error on one line and continue with whatever results you got. Do NOT retry or block on research failures.
 
 Print at most 3 compact bullets:
 

@@ -150,14 +150,69 @@ def _get_kaggle_auth() -> tuple[str, str] | None:
     return None
 
 
+def diagnose_kaggle_credentials() -> str | None:
+    """Check Kaggle credential setup and return a diagnostic message if issues found.
+
+    Returns:
+        None if credentials are valid, or a diagnostic string explaining the problem.
+    """
+    username = os.environ.get("KAGGLE_USERNAME")
+    key = os.environ.get("KAGGLE_KEY")
+    if username and key:
+        return None
+
+    kaggle_json_path = Path.home() / ".kaggle" / "kaggle.json"
+    if not kaggle_json_path.exists():
+        return (
+            "~/.kaggle/kaggle.json not found and KAGGLE_USERNAME/KAGGLE_KEY env vars not set."
+        )
+
+    try:
+        raw = kaggle_json_path.read_text()
+    except OSError as exc:
+        return f"~/.kaggle/kaggle.json exists but cannot be read: {exc}"
+
+    try:
+        creds = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return (
+            f"~/.kaggle/kaggle.json exists but contains invalid JSON: {exc}. "
+            f"File contents preview: {raw[:120]!r}"
+        )
+
+    if not isinstance(creds, dict):
+        return f"~/.kaggle/kaggle.json should be a JSON object, got {type(creds).__name__}."
+
+    found_keys = list(creds.keys())
+    has_username = "username" in creds and creds["username"]
+    has_key = "key" in creds and creds["key"]
+
+    if has_username and has_key:
+        return None
+
+    missing = []
+    if not has_username:
+        missing.append('"username"')
+    if not has_key:
+        missing.append('"key"')
+
+    return (
+        f"~/.kaggle/kaggle.json is missing required fields: {', '.join(missing)}. "
+        f"Found keys: {found_keys}. "
+        f'Expected format: {{"username": "your_username", "key": "your_api_key"}}'
+    )
+
+
 def _credentials_error() -> dict[str, Any]:
     """Build an error dict explaining how to configure Kaggle credentials.
 
     Returns:
-        Error dict with setup instructions.
+        Error dict with setup instructions and diagnostics.
     """
+    diagnosis = diagnose_kaggle_credentials()
     return {
         "error": "Kaggle credentials not found",
+        "diagnosis": diagnosis,
         "setup_instructions": (
             "Configure Kaggle credentials using one of these methods:\n"
             "1. Set environment variables KAGGLE_USERNAME and KAGGLE_KEY\n"

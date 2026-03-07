@@ -3,35 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
-
-
-def _load_dotenv() -> None:
-    """Load .env file if it exists. Checks cwd first, then package root."""
-    candidates = [
-        Path.cwd() / ".env",
-        Path(__file__).resolve().parents[3] / ".env",
-    ]
-    for env_path in candidates:
-        if not env_path.exists():
-            continue
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip()
-            if not os.environ.get(key):
-                os.environ[key] = value
-        break
-
-
-_load_dotenv()
 
 from gtd.research.arxiv_client import search_arxiv as _search_arxiv
 from gtd.research.kaggle_client import (
