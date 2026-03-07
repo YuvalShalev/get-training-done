@@ -111,9 +111,10 @@ If either call returns an error (e.g., missing Kaggle credentials, network timeo
 
 ```
 Kaggle credentials not found. To enable Kaggle research in future sessions:
-1. Go to https://www.kaggle.com/settings → API → Create New Token
-2. This downloads a kaggle.json file
-3. Move it to ~/.kaggle/kaggle.json
+1. Go to https://www.kaggle.com/settings → API section
+2. Copy your username and create a new API token
+3. Create the file ~/.kaggle/kaggle.json with:
+   {"username": "YOUR_USERNAME", "key": "YOUR_TOKEN"}
 That's it — next time Kaggle research will work automatically.
 ```
 
