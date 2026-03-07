@@ -107,7 +107,7 @@ Print: `Searching for approaches...`
 
 If either call returns an error (e.g., missing Kaggle credentials, network timeout), print the error on one line and continue. Do NOT retry or block on research failures.
 
-**Kaggle setup**: If the Kaggle call fails with a credentials error, tell the user: "To enable Kaggle research, copy `.env.example` to `.env` and fill in your Kaggle API credentials from https://www.kaggle.com/settings"
+**Kaggle setup**: If the Kaggle call fails with a credentials error, tell the user: "To enable Kaggle research, set env vars `KAGGLE_USERNAME` and `KAGGLE_KEY`, or create `~/.kaggle/kaggle.json` (download from https://www.kaggle.com/settings → API → Create New Token)"
 
 Print at most 3 compact bullets:
 

@@ -11,19 +11,24 @@ from mcp.server.fastmcp import FastMCP
 
 
 def _load_dotenv() -> None:
-    """Load .env file from project root if it exists."""
-    env_path = Path(__file__).resolve().parents[3] / ".env"
-    if not env_path.exists():
-        return
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    """Load .env file if it exists. Checks cwd first, then package root."""
+    candidates = [
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parents[3] / ".env",
+    ]
+    for env_path in candidates:
+        if not env_path.exists():
             continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip()
-        if not os.environ.get(key):
-            os.environ[key] = value
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if not os.environ.get(key):
+                os.environ[key] = value
+        break
 
 
 _load_dotenv()
