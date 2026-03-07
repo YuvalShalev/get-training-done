@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 def analyze_errors(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
     top_features: list[str] | None = None,
     n_bins: int = 4,
 ) -> dict[str, Any]:
@@ -33,10 +33,11 @@ def analyze_errors(
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run to analyze.
-        data_path: Path to the CSV data file.
-        target_column: Name of the target column.
+        data_path: Path to the CSV data file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         task_type: One of 'binary_classification', 'multiclass_classification',
-                   or 'regression'.
+                   or 'regression'. If omitted, read from run config.
         top_features: Feature names to analyze. If None, uses top 5 by importance.
         n_bins: Number of bins for feature segmentation.
 
@@ -44,6 +45,11 @@ def analyze_errors(
         Dict with error_by_segment, and either confusion_patterns +
         confidence_analysis (classification) or residual_stats (regression).
     """
+    from gtd.core.evaluator import _resolve_defaults
+
+    data_path, target_column, task_type = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column, task_type,
+    )
     model, X, y, feature_columns, df = _load_analysis_context(
         workspace_path, run_id, data_path, target_column,
     )
@@ -143,9 +149,9 @@ def analyze_errors(
 def identify_segments(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
     threshold_pct: float = 5.0,
     n_bins: int = 4,
 ) -> dict[str, Any]:
@@ -157,9 +163,10 @@ def identify_segments(
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the CSV data file.
-        target_column: Name of the target column.
-        task_type: Task type string.
+        data_path: Path to the CSV data file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
+        task_type: Task type string. If omitted, read from run config.
         threshold_pct: Minimum percentage difference to flag a segment.
         n_bins: Number of bins for feature segmentation.
 
@@ -167,6 +174,11 @@ def identify_segments(
         Dict with overall_metric, high_performing segments, and
         low_performing segments.
     """
+    from gtd.core.evaluator import _resolve_defaults
+
+    data_path, target_column, task_type = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column, task_type,
+    )
     model, X, y, feature_columns, df = _load_analysis_context(
         workspace_path, run_id, data_path, target_column,
     )

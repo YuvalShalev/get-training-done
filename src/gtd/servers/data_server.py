@@ -7,7 +7,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from gtd.core import data_profiler
+from gtd.core import data_profiler, data_splitter
 
 mcp = FastMCP("gtd-data")
 
@@ -123,6 +123,56 @@ async def preview_data(path: str, n_rows: int = 5) -> str:
     """
     try:
         result = data_profiler.preview_data(path, n_rows)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def create_data_split(
+    workspace_path: str,
+    data_path: str,
+    target_column: str,
+    task_type: str,
+    strategy: str = "stratified",
+    validation_fraction: float = 0.2,
+    temporal_column: str | None = None,
+    group_column: str | None = None,
+    random_state: int = 42,
+) -> str:
+    """Split data into train and validation partitions for proper HPO evaluation.
+
+    The validation set is held out for ALL evaluation — it is NEVER used for training.
+    Call this before any training to ensure proper train/validation separation.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        data_path: Path to the source CSV file.
+        target_column: Name of the target column.
+        task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+        strategy: Split strategy — 'random', 'stratified', 'temporal', or 'group'.
+                  Default: 'stratified'.
+        validation_fraction: Fraction of data for validation (default 0.2).
+        temporal_column: Column name for temporal sorting (required for 'temporal').
+        group_column: Column name for group splitting (required for 'group').
+        random_state: Random seed (default 42).
+
+    Returns:
+        JSON string with train_data_path, validation_data_path, train_size,
+        validation_size, strategy, and split_info.
+    """
+    try:
+        result = data_splitter.create_data_split(
+            workspace_path=workspace_path,
+            data_path=data_path,
+            target_column=target_column,
+            task_type=task_type,
+            strategy=strategy,
+            validation_fraction=validation_fraction,
+            temporal_column=temporal_column,
+            group_column=group_column,
+            random_state=random_state,
+        )
         return _json_response(result)
     except Exception as exc:
         return _error_response(exc)

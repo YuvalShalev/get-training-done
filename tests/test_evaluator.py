@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from gtd.core import workspace
+from gtd.core.data_splitter import create_data_split
 from gtd.core.evaluator import (
     compare_runs,
     error_analysis,
@@ -436,3 +437,64 @@ class TestGetOptimizationHistory:
         result = get_optimization_history(workspace_path=str(ws_path))
         best_flags = [r["is_best"] for r in result["runs"]]
         assert best_flags.count(True) == 1
+
+
+# ---------------------------------------------------------------------------
+# Auto-discovery (data_path="")
+# ---------------------------------------------------------------------------
+
+
+class TestAutoDiscovery:
+    """Tests for auto-discovery of validation path when data_path is omitted."""
+
+    @pytest.fixture()
+    def split_iris(self, tmp_path: Path, iris_csv: Path):
+        """Create workspace with split and train a model on the train partition."""
+        ws = workspace.create_workspace(tmp_path)
+        ws_path = Path(ws["workspace_path"])
+
+        split = create_data_split(
+            workspace_path=str(ws_path),
+            data_path=str(iris_csv),
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+            strategy="stratified",
+        )
+
+        result = train_model(
+            workspace_path=str(ws_path),
+            data_path=split["train_data_path"],
+            model_type="random_forest",
+            hyperparameters=SMALL_RF_PARAMS,
+            feature_columns=IRIS_FEATURES,
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+            cv_folds=2,
+        )
+        return ws_path, result["run_id"], split
+
+    def test_evaluate_model_auto_discovers_validation(self, split_iris) -> None:
+        ws_path, run_id, split = split_iris
+        metrics = evaluate_model(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+        )
+        assert "accuracy" in metrics
+        assert 0.0 <= metrics["accuracy"] <= 1.0
+
+    def test_get_feature_importance_auto_discovers(self, split_iris) -> None:
+        ws_path, run_id, split = split_iris
+        result = get_feature_importance(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+        )
+        assert "importances" in result
+        assert len(result["importances"]) == len(IRIS_FEATURES)
+
+    def test_error_analysis_auto_discovers(self, split_iris) -> None:
+        ws_path, run_id, split = split_iris
+        result = error_analysis(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+        )
+        assert "error_by_segment" in result

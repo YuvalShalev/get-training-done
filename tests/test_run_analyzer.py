@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from gtd.core import workspace
+from gtd.core.data_splitter import create_data_split
 from gtd.core.run_analyzer import analyze_errors, identify_segments
 from gtd.core.run_analyzer import test_significance as run_test_significance
 from gtd.core.trainer import train_model
@@ -322,3 +323,55 @@ class TestIdentifySegments:
             task_type=IRIS_TASK,
         )
         assert "metric_name" in result
+
+
+# ---------------------------------------------------------------------------
+# Auto-discovery (data_path="")
+# ---------------------------------------------------------------------------
+
+
+class TestAutoDiscovery:
+    """Tests for auto-discovery of validation path when data_path is omitted."""
+
+    @pytest.fixture()
+    def split_iris(self, tmp_path: Path, iris_csv: Path):
+        """Create workspace with split and train on the train partition."""
+        ws = workspace.create_workspace(tmp_path)
+        ws_path = Path(ws["workspace_path"])
+
+        split = create_data_split(
+            workspace_path=str(ws_path),
+            data_path=str(iris_csv),
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+            strategy="stratified",
+        )
+
+        result = train_model(
+            workspace_path=str(ws_path),
+            data_path=split["train_data_path"],
+            model_type="random_forest",
+            hyperparameters=SMALL_RF_PARAMS,
+            feature_columns=IRIS_FEATURES,
+            target_column=IRIS_TARGET,
+            task_type=IRIS_TASK,
+            cv_folds=2,
+        )
+        return ws_path, result["run_id"]
+
+    def test_analyze_errors_auto_discovers(self, split_iris) -> None:
+        ws_path, run_id = split_iris
+        result = analyze_errors(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+        )
+        assert "error_by_segment" in result
+
+    def test_identify_segments_auto_discovers(self, split_iris) -> None:
+        ws_path, run_id = split_iris
+        result = identify_segments(
+            workspace_path=str(ws_path),
+            run_id=run_id,
+        )
+        assert "high_performing" in result
+        assert "low_performing" in result

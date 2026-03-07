@@ -25,23 +25,27 @@ _PLOT_STYLE = "seaborn-v0_8-whitegrid"
 def evaluate_model(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
 ) -> dict[str, Any]:
     """Run full evaluation for a trained model on a dataset.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run to evaluate.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         task_type: One of 'binary_classification', 'multiclass_classification',
-                   or 'regression'.
+                   or 'regression'. If omitted, read from run config.
 
     Returns:
         Full metrics dict (accuracy, f1, r2, rmse, etc. depending on task_type).
     """
+    data_path, target_column, task_type = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column, task_type,
+    )
     model, X, y, feature_columns = _load_run_context(
         workspace_path, run_id, data_path, target_column,
     )
@@ -63,9 +67,9 @@ def evaluate_model(
 def error_analysis(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
 ) -> dict[str, Any]:
     """Run error analysis on a trained model, combining feature importance with segment errors.
 
@@ -75,13 +79,17 @@ def error_analysis(
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run to analyze.
-        data_path: Path to the CSV data file.
-        target_column: Name of the target column.
-        task_type: Task type string.
+        data_path: Path to the CSV data file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
+        task_type: Task type string. If omitted, read from run config.
 
     Returns:
         Error analysis dict from run_analyzer.analyze_errors.
     """
+    data_path, target_column, task_type = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column, task_type,
+    )
     from gtd.core import run_analyzer
 
     # Get top features via importance
@@ -107,8 +115,8 @@ def error_analysis(
 def get_feature_importance(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
+    data_path: str = "",
+    target_column: str = "",
     method: str = "builtin",
 ) -> dict[str, Any]:
     """Compute feature importance for a trained model.
@@ -116,13 +124,17 @@ def get_feature_importance(
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         method: 'builtin' for model.feature_importances_, or 'permutation'.
 
     Returns:
         Dict with method, importances mapping, and plot_path.
     """
+    data_path, target_column, _ = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column,
+    )
     model, X, y, feature_columns = _load_run_context(
         workspace_path, run_id, data_path, target_column,
     )
@@ -153,16 +165,17 @@ def get_feature_importance(
 def get_roc_curve(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
+    data_path: str = "",
+    target_column: str = "",
 ) -> dict[str, Any]:
     """Compute and plot the ROC curve for a binary classification model.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
 
     Returns:
         Dict with fpr, tpr, auc, and plot_path.
@@ -171,6 +184,9 @@ def get_roc_curve(
         ValueError: If the model does not support predict_proba or task is not
                      binary classification.
     """
+    data_path, target_column, _ = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column,
+    )
     from sklearn.metrics import auc, roc_curve
 
     model, X, y, _ = _load_run_context(
@@ -204,16 +220,17 @@ def get_roc_curve(
 def get_pr_curve(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
+    data_path: str = "",
+    target_column: str = "",
 ) -> dict[str, Any]:
     """Compute and plot the precision-recall curve.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
 
     Returns:
         Dict with precision, recall, average_precision (ap), and plot_path.
@@ -221,6 +238,9 @@ def get_pr_curve(
     Raises:
         ValueError: If the model does not support predict_proba.
     """
+    data_path, target_column, _ = _resolve_defaults(
+        workspace_path, run_id, data_path, target_column,
+    )
     from sklearn.metrics import average_precision_score, precision_recall_curve
 
     model, X, y, _ = _load_run_context(
@@ -384,6 +404,35 @@ def get_optimization_history(
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
+
+
+def _resolve_defaults(
+    workspace_path: str,
+    run_id: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
+) -> tuple[str, str, str]:
+    """Fill in missing data_path / target_column / task_type from workspace metadata and run config."""
+    if not data_path:
+        from gtd.core.data_splitter import get_split_paths
+
+        paths = get_split_paths(workspace_path)
+        data_path = paths.get("validation_data_path") or ""
+        if not data_path:
+            raise ValueError(
+                "data_path not provided and no validation split found in workspace. "
+                "Call create_data_split first or provide data_path explicitly."
+            )
+
+    if not target_column or not task_type:
+        config = workspace.load_run_artifact(workspace_path, run_id, "config.json")
+        if not target_column:
+            target_column = config["target_column"]
+        if not task_type:
+            task_type = config.get("task_type", "")
+
+    return data_path, target_column, task_type
 
 
 def _load_run_context(

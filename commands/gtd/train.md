@@ -67,6 +67,30 @@ Confirmation: "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
 
 ---
 
+## Phase 1.5: Data Partitioning
+
+Print: `## Phase 1.5: Data Partitioning`
+
+Before any training, split the data into train and validation partitions.
+The validation set is held out for ALL evaluation — it is NEVER used for training.
+
+1. Decide the split strategy based on Phase 1 profiling results:
+   - If data has a date/timestamp column → `strategy="temporal"` (prevents temporal leakage)
+   - If classification with class imbalance → `strategy="stratified"` (preserves class distribution)
+   - If data has a group/ID column (e.g., customer_id, patient_id) → `strategy="group"` (prevents group leakage)
+   - Regression without special structure → `strategy="random"`
+   - Default → `strategy="stratified"` for classification, `"random"` for regression
+
+2. Call `create_data_split` (gtd-data server)
+3. Use `train_data_path` for all `train_model` calls (Phase 3-4)
+4. Use `validation_data_path` for all evaluation/analysis calls, or omit `data_path` to auto-discover
+
+Print: `Split: {strategy} | Train: {train_rows} rows | Validation: {val_rows} rows`
+
+**Note on feature engineering**: If `engineer_features` is used later, it must be applied to train and validation CSVs separately using the same operations, after the split.
+
+---
+
 ## Phase 2: Research
 
 Print: `## Phase 2: Research`
@@ -90,8 +114,8 @@ Research: (1) {model_families} dominate for {data_type} (2) {technique} for {iss
 Print: `## Phase 3: Baseline Models`
 Print: `Training 3 baselines...`
 
-1. Call `train_model` (gtd-training server) with the **first baseline** — this creates the workspace. **Pass `memory_dir`** with your auto-memory directory path on this first call. This automatically checks for proven strategies from past sessions and includes recommendations in the response.
-2. Train 2 more models using the same workspace:
+1. Call `train_model` (gtd-training server) with the **first baseline** using `train_data_path` from Phase 1.5 — this creates the workspace. **Pass `memory_dir`** with your auto-memory directory path on this first call. This automatically checks for proven strategies from past sessions and includes recommendations in the response.
+2. Train 2 more models using the same workspace (always pass `train_data_path` as `data_path`):
    - A gradient boosting model (e.g., `xgboost` or `lightgbm`)
    - A random forest (`random_forest`)
    - A simple model (`logistic_regression` for classification, `linear_regression` for regression)
@@ -129,9 +153,11 @@ After each training run, follow this structured protocol:
 
 #### Step 0: Error-Informed Decision
 
-After each run, call `analyze_errors` with the current best run to understand where the model fails. Use this to guide the next action:
+After each run, call `analyze_errors` with the current best run to understand where the model fails (omit `data_path` to auto-use the validation partition). Use this to guide the next action:
 - If error analysis shows a specific segment with high error rate → suggest feature engineering or model change targeting that segment
 - If improvement is not statistically significant (call `test_significance` with CV scores) → don't count it toward patience, keep exploring
+
+If deep analysis insights are available from the last reflexion (Step 5), use the `top_recommendation` to prioritize your next action.
 
 #### Step 1: Diagnose
 
@@ -204,13 +230,17 @@ Print the reason on one line.
 
 #### Step 5: Reflect (every 3 optimization runs)
 
-Every 3 optimization runs, call `save_observation` (gtd-training server) with:
-- `workspace_path`: current workspace
-- `run_number`: current run number
-- `score_trajectory`: the trajectory from the last `train_model` response
-- `actions_taken`: list of changes made in the last 3 runs (e.g., `["lr=0.05", "depth=8", "switched to LightGBM"]`)
-- `diagnosis`: one sentence — what's working and what's not
-- `next_strategy`: what you plan to try next and why
+Every 3 optimization runs:
+
+1. Call `analyze_run_deep` (gtd-training server) on the current best run (omit `data_path` to auto-use the validation partition) to get ranked insights about model weaknesses, overconfident predictions, and weak subpopulations.
+
+2. Call `save_observation` (gtd-training server) with:
+   - `workspace_path`: current workspace
+   - `run_number`: current run number
+   - `score_trajectory`: the trajectory from the last `train_model` response
+   - `actions_taken`: list of changes made in the last 3 runs (e.g., `["lr=0.05", "depth=8", "switched to LightGBM"]`)
+   - `diagnosis`: include the top 3 insight descriptions from `analyze_run_deep` alongside your own analysis
+   - `next_strategy`: use the `top_recommendation` from deep analysis to inform what to try next
 
 This is mandatory. Do not skip it.
 
@@ -223,9 +253,9 @@ Print: `## Phase 5: Export & Report`
 1. Identify the best run based on the primary metric
 1.5. Call `load_observations` to retrieve within-run reflections from Phase 4. Use these to enrich the optimization summary with key strategy shifts and diagnoses.
 2. Call `export_model` (gtd-training server) with the best run ID. It auto-discovers `memory_dir` from the workspace, so learnings are saved automatically.
-3. Call `evaluate_model` for final comprehensive metrics
-4. Call `get_feature_importance` on the best run
-5. Call `get_roc_curve` (for binary classification) and `get_pr_curve` (for classification tasks)
+3. Call `evaluate_model` for final comprehensive metrics (omit `data_path` to auto-use the validation partition)
+4. Call `get_feature_importance` on the best run (omit `data_path` to auto-use the validation partition)
+5. Call `get_roc_curve` (for binary classification) and `get_pr_curve` (for classification tasks) — omit `data_path` to auto-use the validation partition
 6. Call `synthesize_session` (gtd-training server) with:
    - `workspace_path`: current workspace
    - `dataset_name`: the dataset filename

@@ -63,6 +63,16 @@ def train_model(
     if not source.exists():
         raise FileNotFoundError(f"Data file not found: {data_path}")
 
+    # Warn if no train/validation split exists
+    from gtd.core.data_splitter import get_split_paths
+
+    split_paths = get_split_paths(workspace_path)
+    if not split_paths.get("train_data_path"):
+        logger.warning(
+            "No train/validation split detected. "
+            "Consider calling create_data_split first."
+        )
+
     from gtd.core.data_profiler import load_csv
     df = load_csv(str(source))
     _validate_columns(df, feature_columns, target_column)
@@ -124,6 +134,7 @@ def train_model(
         "cv_folds": cv_folds,
         "random_state": random_state,
         "data_path": data_path,
+        "source_data_path": data_path,
     }
     workspace.save_run_artifact(ws, run_id, "config.json", config)
 

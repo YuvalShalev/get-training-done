@@ -24,9 +24,11 @@ On the **first `train_model()` call**, the system loads prior knowledge to boots
 
 | File | Location | Written By | Trigger |
 |------|----------|-----------|---------|
+| `data/train.csv` | `workspace_path/` | `data_splitter.create_data_split()` | Phase 1.5 — train partition for model training |
+| `data/validation.csv` | `workspace_path/` | `data_splitter.create_data_split()` | Phase 1.5 — held-out validation partition for all evaluation |
 | `memory_dir.txt` | `workspace_path/` | `trainer._store_memory_dir()` | First `train_model()` with `memory_dir` param — persists path for later auto-discovery |
 | `dataset_fingerprint.json` | `workspace_path/` | `trainer._store_fingerprint()` | First `train_model()` — computes size_class, task, feature_mix, issues |
-| `metadata.json` | `workspace_path/` | `workspace.create_workspace()` | Workspace creation (Phase 2) — initial empty metadata |
+| `metadata.json` | `workspace_path/` | `workspace.create_workspace()` | Workspace creation (Phase 2) — initial empty metadata. Updated by `create_data_split()` with `train_data_path`, `validation_data_path`, `split_strategy` |
 
 ---
 
@@ -47,6 +49,8 @@ On the **first `train_model()` call**, the system loads prior knowledge to boots
 | File | Location | Written By | Content |
 |------|----------|-----------|---------|
 | `observation-log.md` | `workspace_path/` | `meta_learner.save_observation()` | Appended markdown block: run #, score trajectory, diagnosis, next strategy |
+
+Before saving the observation, call `analyze_run_deep` on the current best run. This performs error profiling, slice discovery, confidence calibration, and threshold optimization, returning ranked actionable insights. The top insights feed into the observation's `diagnosis` and `next_strategy` fields.
 
 This is the **Reflexion pattern** — the agent pauses every 3 runs to reflect on what's working and what to try next. These observations are workspace-local (not global) because they're specific to the current optimization session.
 
@@ -133,10 +137,12 @@ Triggered when the agent exports the best model. Auto-saves learning data.
 ## Data Flow Diagram
 
 ```
-SESSION START (Phase 1-2)
+SESSION START (Phase 1-1.5)
   READ: ~/.claude/gtd/high-level-observations.md  ->  prior_knowledge (injected into prompt)
   READ: ~/.claude/gtd/gtd-learnings.md            ->  match_strategies() -> strategy_recommendation
   WRITE: workspace_path/metadata.json              (workspace created)
+  WRITE: workspace_path/data/train.csv             (Phase 1.5: train partition)
+  WRITE: workspace_path/data/validation.csv        (Phase 1.5: validation partition)
 
 DURING SESSION (Phase 3-4)
   WRITE: workspace_path/runs/run_NNN_*/            (model + config + metrics per run)
@@ -168,6 +174,8 @@ SESSION END (Phase 5)
 
 | File | Role |
 |------|------|
+| `src/gtd/core/data_splitter.py` | Train/validation data partitioning (`create_data_split`, `get_split_paths`) |
+| `src/gtd/core/deep_analyzer.py` | Deep analysis at reflexion checkpoints (error profiling, slice discovery, confidence, thresholds) |
 | `src/gtd/core/meta_learner.py` | All learning read/write functions |
 | `src/gtd/core/trainer.py` | `train_model()` and `export_model()` — triggers learning side effects |
 | `src/gtd/servers/training_server.py` | MCP server: `synthesize_session()`, `get_strategy_recommendation()` |

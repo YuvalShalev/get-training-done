@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from gtd.core import evaluator, feature_engine, meta_learner, model_registry, registry, run_analyzer, trainer, workspace
+from gtd.core import deep_analyzer, evaluator, feature_engine, meta_learner, model_registry, registry, run_analyzer, trainer, workspace
 from gtd.core.trainer import _discover_memory_dir
 
 mcp = FastMCP("gtd-training")
@@ -107,18 +107,20 @@ def predict(
 def evaluate_model(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
 ) -> str:
     """Run full evaluation metrics for a trained model.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+                   If omitted, read from run config.
 
     Returns:
         JSON string with full metrics (accuracy, f1, confusion_matrix, r2, rmse, etc.).
@@ -148,8 +150,8 @@ def evaluate_model(
 def get_feature_importance(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
+    data_path: str = "",
+    target_column: str = "",
     method: str = "builtin",
 ) -> str:
     """Compute feature importance for a trained model.
@@ -157,8 +159,9 @@ def get_feature_importance(
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         method: 'builtin' or 'permutation'.
 
     Returns:
@@ -181,16 +184,17 @@ def get_feature_importance(
 def get_roc_curve(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
+    data_path: str = "",
+    target_column: str = "",
 ) -> str:
     """Compute and plot the ROC curve for a binary classification model.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
 
     Returns:
         JSON string with fpr, tpr, auc, and plot_path.
@@ -211,16 +215,17 @@ def get_roc_curve(
 def get_pr_curve(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
+    data_path: str = "",
+    target_column: str = "",
 ) -> str:
     """Compute and plot the precision-recall curve.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the evaluation CSV file.
-        target_column: Name of the target column.
+        data_path: Path to the evaluation CSV file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
 
     Returns:
         JSON string with precision, recall, average precision, and plot_path.
@@ -265,18 +270,20 @@ def compare_runs(
 def analyze_errors(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
 ) -> str:
     """Analyze model errors by feature segment to find where the model fails.
 
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run to analyze.
-        data_path: Path to the CSV data file.
-        target_column: Name of the target column.
+        data_path: Path to the CSV data file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+                   If omitted, read from run config.
 
     Returns:
         JSON string with error_by_segment, confusion_patterns, confidence_analysis
@@ -299,9 +306,9 @@ def analyze_errors(
 def identify_segments(
     workspace_path: str,
     run_id: str,
-    data_path: str,
-    target_column: str,
-    task_type: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
     threshold_pct: float = 5.0,
 ) -> str:
     """Identify high-performing and low-performing data segments.
@@ -309,9 +316,11 @@ def identify_segments(
     Args:
         workspace_path: Path to the workspace directory.
         run_id: ID of the training run.
-        data_path: Path to the CSV data file.
-        target_column: Name of the target column.
+        data_path: Path to the CSV data file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
         task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+                   If omitted, read from run config.
         threshold_pct: Minimum percentage difference to flag a segment (default 5.0).
 
     Returns:
@@ -355,6 +364,47 @@ def test_significance(
             cv_scores_a=cv_scores_a,
             cv_scores_b=cv_scores_b,
             alpha=alpha,
+        )
+        return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def analyze_run_deep(
+    workspace_path: str,
+    run_id: str,
+    data_path: str = "",
+    target_column: str = "",
+    task_type: str = "",
+    top_n: int = 15,
+) -> str:
+    """Deep analysis of model errors, segments, and weaknesses.
+
+    Call this at reflexion checkpoints (every 3 runs) to get ranked,
+    actionable insights that inform the next optimization strategy.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        run_id: ID of the training run to analyze.
+        data_path: Path to the CSV data file. If omitted, uses the
+                   validation partition from the workspace split.
+        target_column: Name of the target column. If omitted, read from run config.
+        task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+                   If omitted, read from run config.
+        top_n: Maximum number of insights to return (default 15).
+
+    Returns:
+        JSON string with ranked insights, summary, and top_recommendation.
+    """
+    try:
+        result = deep_analyzer.analyze_run_deep(
+            workspace_path=workspace_path,
+            run_id=run_id,
+            data_path=data_path,
+            target_column=target_column,
+            task_type=task_type,
+            top_n=top_n,
         )
         return json.dumps(result, default=str)
     except Exception as exc:
