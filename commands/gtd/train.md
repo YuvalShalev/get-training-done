@@ -91,13 +91,23 @@ Print: `Split: {strategy} | Train: {train_rows} rows | Validation: {val_rows} ro
 
 ---
 
-## Phase 2: Research
+## Phase 2: Research (Optional)
+
+Ask the user in plain text: "Run external research (arXiv + Kaggle)? (yes/no)"
+
+**If the user says no** (or any negative response): skip this phase entirely and proceed to Phase 3.
+
+**If the user says yes**:
 
 Print: `## Phase 2: Research`
 Print: `Searching for approaches...`
 
 1. Call `search_arxiv` (gtd-research server) with a query describing the dataset characteristics
 2. Call `search_kaggle_notebooks` with a query about similar datasets or problem types
+
+If either call returns an error (e.g., missing Kaggle credentials, network timeout), print the error on one line and continue. Do NOT retry or block on research failures.
+
+**Kaggle setup**: If the Kaggle call fails with a credentials error, tell the user: "To enable Kaggle research, copy `.env.example` to `.env` and fill in your Kaggle API credentials from https://www.kaggle.com/settings"
 
 Print at most 3 compact bullets:
 
