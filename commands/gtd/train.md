@@ -158,7 +158,7 @@ Research: (1) {model_families} dominate for {data_type} (2) {technique} for {iss
 
 Print: `## Phase 3: Baseline Models`
 
-Record `SESSION_START_TIME` = current wall-clock time (this is when the time budget starts).
+Initialize `ELAPSED_TRAINING_TIME = 0` (cumulative seconds from `training_time` in each `train_model` response).
 
 Print: `⏱ Time: 0s / {TIME_BUDGET_SECONDS}s remaining`
 
@@ -211,10 +211,12 @@ Every `train_model` response now includes `score_trajectory` (all runs so far) a
 
 ### Time Tracking (MANDATORY on every line)
 
-After each `train_model` call, compute:
-- `elapsed` = current_time - SESSION_START_TIME
-- `remaining` = TIME_BUDGET_SECONDS - elapsed
-- `avg_run_time` = elapsed / runs_completed
+After each `train_model` call, update the time tracker using the `training_time` field from the response:
+- `ELAPSED_TRAINING_TIME += training_time` (from the `train_model` response)
+- `remaining` = TIME_BUDGET_SECONDS - ELAPSED_TRAINING_TIME
+- `avg_run_time` = ELAPSED_TRAINING_TIME / runs_completed
+
+Format elapsed/remaining as human-readable: e.g., 65s → "1m05s", 400s → "6m40s".
 
 Per-run output format:
 ```
