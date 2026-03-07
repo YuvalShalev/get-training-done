@@ -1,6 +1,6 @@
 ---
 description: Train and optimize ML models on a dataset
-argument-hint: "path/to/data.csv [--target COL] [--max-runs N] [--target-metric METRIC>VALUE]"
+argument-hint: "path/to/data.csv [--target COL] [--time DURATION] [--target-metric METRIC>VALUE]"
 ---
 
 # GTD: Train & Optimize
@@ -38,10 +38,10 @@ Parse from the argument string:
 
 - `DATA_PATH` (required) — path to the CSV file
 - `--target COL` (optional) — target column name. If omitted, auto-detect during profiling
-- `--max-runs N` (optional, default **20**) — total training run budget (baselines + optimization)
+- `--time DURATION` (optional, default **"10m"**) — time budget for optimization. Formats: `"5m"`, `"30m"`, `"1h"`, `"1.5h"`
 - `--target-metric METRIC>VALUE` (optional) — e.g. `accuracy>0.95` or `f1_macro>0.8`. Stop early if achieved
 
-Store these as variables for use throughout the workflow.
+Parse `DURATION` into `TIME_BUDGET_SECONDS` (e.g., "5m" → 300, "1.5h" → 5400). Store these as variables for use throughout the workflow.
 
 ---
 
@@ -61,9 +61,24 @@ Data: {rows} rows x {cols} cols | {task_type} | Target: {target}
 Features: {n_numeric} numeric, {n_categorical} categorical | Missing: {missing_summary} | Issues: {issues_summary}
 ```
 
+### Complexity Assessment
+
+Based on profiling and correlation results, classify the problem:
+
+**SIMPLE** — strong linear signal exists:
+- Any feature-target |r| > 0.5, few features (< 20), clean data (< 5% missing), no severe class imbalance
+
+**MODERATE** — nonlinear patterns likely needed:
+- Moderate correlations (0.2 < |r| < 0.5), mix of feature types, some missing data or imbalance
+
+**COMPLEX** — likely needs advanced approaches:
+- Weak correlations (|r| < 0.2), high cardinality categoricals, many features (> 50), severe imbalance, complex interactions likely
+
+Print: `Complexity: {SIMPLE|MODERATE|COMPLEX} — {one-line reason}`
+
 Confirmation: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
 
-**CONTEXT RULE**: From this point forward, reference ONLY the 2-line summary above. Do NOT repeat or include raw profiling JSON from this phase in any subsequent message.
+**CONTEXT RULE**: From this point forward, reference ONLY the 2-line summary and complexity assessment above. Do NOT repeat or include raw profiling JSON from this phase in any subsequent message.
 
 ---
 
@@ -142,32 +157,49 @@ Research: (1) {model_families} dominate for {data_type} (2) {technique} for {iss
 ## Phase 3: Baseline Models
 
 Print: `## Phase 3: Baseline Models`
-Print: `Training 3 baselines...`
 
-1. Call `train_model` (gtd-training server) with the **first baseline** using `train_data_path` from Phase 1.5 — this creates the workspace. **Pass `memory_dir`** with your auto-memory directory path on this first call. This automatically checks for proven strategies from past sessions and includes recommendations in the response.
+Record `SESSION_START_TIME` = current wall-clock time (this is when the time budget starts).
+
+Print: `⏱ Time: 0s / {TIME_BUDGET_SECONDS}s remaining`
+
+### Tier 1: Simplest baseline (always runs first)
+
+1. Call `train_model` (gtd-training server) with the **simplest model** using `train_data_path` from Phase 1.5 — this creates the workspace. **Pass `memory_dir`** with your auto-memory directory path on this first call. This automatically checks for proven strategies from past sessions and includes recommendations in the response.
+   - Classification → `logistic_regression`
+   - Regression → `linear_regression`
+
+Print: `#1 {Model} → {score} | ⏱ {elapsed} / {budget}`
+
+### Tier 2: Tree-based baselines
+
 2. Train 2 more models using the same workspace (always pass `train_data_path` as `data_path`):
-   - A gradient boosting model (e.g., `xgboost` or `lightgbm`)
-   - A random forest (`random_forest`)
-   - A simple model (`logistic_regression` for classification, `linear_regression` for regression)
+   - A random forest (`random_forest`) with defaults
+   - Best boosting model (`xgboost` or `lightgbm`) with defaults
+
+Print each with timer: `#2 {Model} → {score} | ⏱ {elapsed} / {budget}`
 
 If the first `train_model` response includes `strategy_recommendation`, use those strategies as starting points in Phase 4 instead of defaults.
 
 If the first `train_model` response includes `prior_knowledge`, read it carefully. This contains synthesized insights from past sessions. Use these to inform your model selection and hyperparameter choices throughout Phase 4.
 
-After all 3, print a compact one-line summary:
+### Evaluate tier positioning
 
-```
-Baselines: {Model1} {score1} | {Model2} {score2} | {Model3} {score3} → Best: {best_model}
-```
+After baselines, determine where to focus optimization:
+- If Tier 1 score is within 2% of Tier 2 best → start Phase 4 at Tier 1 (optimize simple model)
+- Otherwise → start Phase 4 at Tier 2 (optimize tree models)
+- Phase 4 always escalates to next tier when current tier plateaus
 
-**CONTEXT RULE**: From this point forward, reference ONLY the one-line baselines summary above. Do NOT repeat or include individual run JSONs from this phase in any subsequent message.
+Print: `Baselines: {Model1} {score1} | {Model2} {score2} | {Model3} {score3}`
+Print: `Starting optimization at Tier {1|2} — {reason}`
+
+**CONTEXT RULE**: From this point forward, reference ONLY the baselines summary above. Do NOT repeat or include individual run JSONs from this phase in any subsequent message.
 
 ---
 
 ## Phase 4: Iterative Optimization
 
 Print: `## Phase 4: Iterative Optimization`
-Print: `Budget: {max_runs - 3} remaining | Patience: 3 | Target: {target_metric if set, else "maximize"}`
+Print: `⏱ Budget: {remaining} | Patience: 3 | Target: {target_metric if set, else "maximize"}`
 
 At the start of Phase 4, call `list_available_models` to load the full hyperparameter spaces.
 
@@ -177,9 +209,80 @@ Do NOT ask the user to choose between models or hyperparameters. Follow the deci
 
 Every `train_model` response now includes `score_trajectory` (all runs so far) and `run_number`. Use this trajectory data to inform your decisions — no need to track it manually.
 
+### Time Tracking (MANDATORY on every line)
+
+After each `train_model` call, compute:
+- `elapsed` = current_time - SESSION_START_TIME
+- `remaining` = TIME_BUDGET_SECONDS - elapsed
+- `avg_run_time` = elapsed / runs_completed
+
+Per-run output format:
+```
+#{n} {Model} {change} → {score} ({delta}) ⏱ {elapsed}/{budget} [{remaining} left]
+```
+
+Examples:
+```
+#4 LogReg C=0.1 → 0.891 (+0.003) ★ new best ⏱ 1m05s/10m [8m55s left]
+#7 XGBoost lr=0.05 → 0.912 (+0.008) ★ new best ⏱ 3m20s/10m [6m40s left]
+#12 Stack(XGB+RF+LR) → 0.921 (+0.004) ★ new best ⏱ 7m15s/10m [2m45s left]
+```
+
+### Tier 1: Simple Model Optimization
+
+Optimize the simple model (`logistic_regression` / `linear_regression` / `elasticnet`):
+- Regularization tuning (C, alpha, l1_ratio)
+- Feature selection (drop low-importance features)
+- Feature engineering (interactions for key features found in correlations)
+
+**Escalate to Tier 2 when**: patience exhausted (3 runs no improvement) OR complexity is COMPLEX
+
+When escalating, print:
+`→ Tier 1 plateau at {score}. Escalating to Tier 2 — tree-based optimization ⏱ {remaining} left`
+
+### Tier 2: Tree-Based Optimization
+
+Standard HPO for tree models (recommended tuning order):
+1. `learning_rate` + `n_estimators` (most impactful — try 0.01, 0.05 with proportionally more `n_estimators`)
+2. `max_depth` / `num_leaves` (controls complexity)
+3. `subsample` + `colsample_bytree` (reduces overfitting)
+4. `reg_alpha` + `reg_lambda` (L1/L2 regularization)
+
+Try multiple model families: xgboost, lightgbm, catboost, random_forest, extra_trees.
+
+**Escalate to Tier 3 when**: patience exhausted AND remaining time > avg_run_time * 3
+
+When escalating, print:
+`→ Tier 2 plateau at {score}. Escalating to Tier 3 — advanced approaches ⏱ {remaining} left`
+
+### Tier 3: Advanced Approaches (research-driven)
+
+This tier uses insights from Phase 2 research AND additional targeted research:
+
+1. **Research-informed models**: If Phase 2 research found specific approaches
+   (e.g., a Kaggle notebook using TabNet, a paper recommending CatBoost with
+   specific settings for this data type), try those first.
+
+2. **Stacking/Ensembling**: Build stacked ensembles combining the best models
+   from Tiers 1 and 2. Use `train_model` with the best configs, then ensemble
+   predictions via feature engineering + a meta-learner.
+
+3. **Neural networks**: Try `mlp_classifier` / `mlp_regressor` with architecture
+   search (hidden layer sizes, activation functions).
+
+4. **Advanced feature engineering**: Based on error analysis insights —
+   create interaction features, polynomial features, or domain-specific
+   transforms that target weak segments identified by `analyze_errors`.
+
+5. **Additional research**: If time remains, call `search_arxiv` or
+   `search_kaggle_notebooks` with refined queries based on what you've
+   learned about the dataset's challenges. Apply any novel techniques found.
+
+**If time runs out during any tier**: Stop and proceed to Phase 5 with best result so far.
+
 ### Optimization Decision Protocol
 
-After each training run, follow this structured protocol:
+After each training run within any tier, follow this structured protocol:
 
 #### Step 0: Error-Informed Decision
 
@@ -219,18 +322,10 @@ Based on diagnosis, pick ONE action:
 
 #### Step 4: Log
 
-Per-run output — single line each:
+Per-run output — single line each, always including the timer:
 
 ```
-#{n} {Model} {change_description} → {score} ({delta}) {significance_note} {best_marker}
-```
-
-Examples:
-```
-#4 XGBoost lr=0.05 → 0.879 (+0.007) ★ new best
-#5 XGBoost depth=8 → 0.876 (-0.003)
-#6 LightGBM default → 0.884 (+0.012, p=0.02*) ★ new best
-#7 LightGBM lr=0.02 → 0.885 (+0.001) | errors: Age>60 (32% vs 12%)
+#{n} {Model} {change_description} → {score} ({delta}) {significance_note} {best_marker} ⏱ {elapsed}/{budget} [{remaining} left]
 ```
 
 When comparing runs, call `test_significance` and include significance in the line if p < 0.05.
@@ -238,23 +333,15 @@ After each run, call `analyze_errors` and include the top error segment if notab
 
 No growing table. Runs >5 old get summarized: `Runs 1-5: best #4 at 0.879`
 
-### Recommended Tuning Order (for boosting models)
-
-1. `learning_rate` (most impactful — try 0.01, 0.05 with proportionally more `n_estimators`)
-2. `max_depth` / `num_leaves` (controls complexity)
-3. `subsample` + `colsample_bytree` (reduces overfitting)
-4. `reg_alpha` + `reg_lambda` (L1/L2 regularization)
-5. `min_child_weight` / `min_child_samples` (leaf-level regularization)
-
 ### Stopping Criteria
 
 Stop when any condition is met:
 
-- **Patience exhausted**: No improvement >0.5% for 3 consecutive runs
+- **Time up**: estimated time for next run > remaining time
+- **Patience exhausted at Tier 3**: No improvement after exploring advanced approaches
 - **Target achieved**: Target metric exceeded
-- **Budget exhausted**: All runs used
 
-Print the reason on one line.
+Print: `⏱ Stopping: {reason} | Total: {elapsed} | Runs: {n}`
 
 **CONTEXT RULE (every 3 runs)**: Compact runs older than the 3 most recent into a single line: `Runs {start}-{end}: best was #{n} at {score} ({model})`. From this point forward, reference ONLY that summary for older runs. Do NOT repeat their individual run details.
 
@@ -296,7 +383,8 @@ Print: `## Phase 5: Export & Report`
 Print a compact final report:
 
 ```
-Best: {model_type} {run_id} | {metric}={score}±{std} | {total_runs} runs ({n_baselines}+{n_opt})
+Best: {model_type} {run_id} | {metric}={score}±{std} | {total_runs} runs in {elapsed}
+Tier: {final_tier} | Complexity: {assessment}
 Saved: {export_path}/model.joblib
 Top features: {feat1} ({imp1}), {feat2} ({imp2}), {feat3} ({imp3})
 ```
@@ -320,4 +408,4 @@ Then print expanded details:
 - List models: `/gtd:models`
 ```
 
-**CONTEXT RULE**: Before starting Phase 5, summarize the entire optimization as: `Optimization: {n} runs, {baseline} → {best} (+{delta}). Key moves: {2-3 changes}`. From this point forward, reference ONLY that summary. Do NOT repeat individual run details from Phase 4.
+**CONTEXT RULE**: Before starting Phase 5, summarize the entire optimization as: `Optimization: {n} runs in {elapsed}, {baseline} → {best} (+{delta}). Tier: {final_tier}. Key moves: {2-3 changes}`. From this point forward, reference ONLY that summary. Do NOT repeat individual run details from Phase 4.
