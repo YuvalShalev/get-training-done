@@ -300,7 +300,7 @@ def match_strategies(
             scored.append((score, strat))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [s for _, s in scored]
+    return [{**s, "match_score": score} for score, s in scored]
 
 
 def extract_strategy_sequence(optimization_history: dict[str, Any]) -> dict[str, Any]:

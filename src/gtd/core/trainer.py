@@ -191,8 +191,16 @@ def train_model(
     run_count = _get_run_count(str(ws))
     result["run_number"] = run_count
 
-    # C. On first call: store dataset fingerprint
+    # B2. Session wall-clock time
+    session_start = _load_session_start(str(ws))
+    if session_start is not None:
+        result["session_elapsed"] = time.time() - session_start
+
+    # C. On first call: store dataset fingerprint and session start
     if run_count == 1:
+        now = time.time()
+        _store_session_start(str(ws), now)
+        result["session_elapsed"] = time.time() - now
         try:
             from gtd.core import meta_learner
 
@@ -411,6 +419,20 @@ def _load_run_log(workspace_path: str) -> list[dict[str, Any]]:
 def _get_run_count(workspace_path: str) -> int:
     """Count runs in the workspace run log."""
     return len(_load_run_log(workspace_path))
+
+
+def _store_session_start(workspace_path: str, start_time: float) -> None:
+    """Persist session start timestamp in workspace."""
+    path = Path(workspace_path) / "session_start.txt"
+    path.write_text(str(start_time))
+
+
+def _load_session_start(workspace_path: str) -> float | None:
+    """Load session start timestamp from workspace."""
+    path = Path(workspace_path) / "session_start.txt"
+    if not path.exists():
+        return None
+    return float(path.read_text().strip())
 
 
 def _store_fingerprint(workspace_path: str, fingerprint: dict[str, Any]) -> None:

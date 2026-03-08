@@ -106,11 +106,53 @@ Print: `Split: {strategy} | Train: {train_rows} rows | Validation: {val_rows} ro
 
 ---
 
-## Phase 2: Research (Optional)
+## Phase 3a: First Baseline + Experience Check
 
-Use AskUserQuestion: "Run external research (arXiv + Kaggle)? Kaggle requires API credentials. (yes/no)"
+Print: `## Phase 3a: First Baseline`
 
-**If the user says no** (or any negative response): skip this phase entirely and proceed to Phase 3.
+Each `train_model` response includes `session_elapsed` — wall-clock seconds since the first training call. Use this directly for time display (no manual accumulation needed).
+
+Print: `⏱ Time: 0s / {TIME_BUDGET_SECONDS}s remaining`
+
+### Tier 1: Simplest baseline (always runs first)
+
+1. Call `train_model` (gtd-training server) with the **simplest model** using `train_data_path` from Phase 1.5 — this creates the workspace. **Pass `memory_dir`** with your auto-memory directory path on this first call. This automatically checks for proven strategies from past sessions and includes recommendations in the response.
+   - Classification → `logistic_regression`
+   - Regression → `linear_regression`
+
+Print: `#1 {Model} → {score} | ⏱ {elapsed} / {budget}`
+
+### Experience Check
+
+After the first `train_model` call, check if `strategy_recommendation` is present in the response. Each recommendation includes a `match_score` (1-7) indicating similarity to past datasets:
+
+| Match Score | Label | Actions |
+|-------------|-------|---------|
+| **7** (task+size+feature) | Very similar | Skip Phase 2. Skip non-proven tree baseline in Phase 3b. Start Phase 4 with proven model+HPs. Patience = 2. |
+| **5-6** (task+size OR task+feature) | Similar | Skip Phase 2. Run all baselines in Phase 3b. Use proven config as first Phase 4 attempt. Patience = 3. |
+| **≤ 4** (task only) | Loosely related | Run Phase 2 normally. Use as hints only. Patience = 3. |
+| **None** | No match | Run all phases normally. |
+
+Use the highest `match_score` from the first recommendation (they are sorted best-first).
+
+Print format:
+- Score 7: `⚡ Strong match (score 7): {description} → {best}. Accelerating with proven strategy.`
+- Score 5-6: `⚡ Moderate match (score {n}): {description}. Using as starting config.`
+- Score ≤ 4: `📋 Weak match (score {n}): {description}. Using as hint only.`
+
+If the first `train_model` response includes `prior_knowledge`, read it carefully. This contains synthesized insights from past sessions. Use these to inform your model selection and hyperparameter choices throughout Phase 4.
+
+Store the experience check result (match score and recommendations) for use in Phase 2 and Phase 3b.
+
+---
+
+## Phase 2: Research (Conditional)
+
+**If Experience Check score ≥ 5, skip this phase entirely.** Print: `Skipping research — strong experience match available.`
+
+Otherwise, use AskUserQuestion: "Run external research (arXiv + Kaggle)? Kaggle requires API credentials. (yes/no)"
+
+**If the user says no** (or any negative response): skip this phase entirely and proceed to Phase 3b.
 
 **If the user says yes**:
 
@@ -154,33 +196,22 @@ Research: (1) {model_families} dominate for {data_type} (2) {technique} for {iss
 
 ---
 
-## Phase 3: Baseline Models
+## Phase 3b: Remaining Baselines
 
-Print: `## Phase 3: Baseline Models`
-
-Initialize `ELAPSED_TRAINING_TIME = 0` (cumulative seconds from `training_time` in each `train_model` response).
-
-Print: `⏱ Time: 0s / {TIME_BUDGET_SECONDS}s remaining`
-
-### Tier 1: Simplest baseline (always runs first)
-
-1. Call `train_model` (gtd-training server) with the **simplest model** using `train_data_path` from Phase 1.5 — this creates the workspace. **Pass `memory_dir`** with your auto-memory directory path on this first call. This automatically checks for proven strategies from past sessions and includes recommendations in the response.
-   - Classification → `logistic_regression`
-   - Regression → `linear_regression`
-
-Print: `#1 {Model} → {score} | ⏱ {elapsed} / {budget}`
+Print: `## Phase 3b: Remaining Baselines`
 
 ### Tier 2: Tree-based baselines
 
-2. Train 2 more models using the same workspace (always pass `train_data_path` as `data_path`):
-   - A random forest (`random_forest`) with defaults
-   - Best boosting model (`xgboost` or `lightgbm`) with defaults
+Train tree-based models using the same workspace (always pass `train_data_path` as `data_path`):
+
+- **If Experience Check score = 7** and the proven best model is tree-based: train ONLY that model family (e.g., if proven best is `xgboost`, skip `random_forest` and vice versa).
+- **Otherwise**: Train both:
+  - A random forest (`random_forest`) with defaults
+  - Best boosting model (`xgboost` or `lightgbm`) with defaults
 
 Print each with timer: `#2 {Model} → {score} | ⏱ {elapsed} / {budget}`
 
-If the first `train_model` response includes `strategy_recommendation`, use those strategies as starting points in Phase 4 instead of defaults.
-
-If the first `train_model` response includes `prior_knowledge`, read it carefully. This contains synthesized insights from past sessions. Use these to inform your model selection and hyperparameter choices throughout Phase 4.
+If the first `train_model` response included `strategy_recommendation`, use those strategies as starting points in Phase 4 instead of defaults.
 
 ### Evaluate tier positioning
 
@@ -188,6 +219,10 @@ After baselines, determine where to focus optimization:
 - If Tier 1 score is within 2% of Tier 2 best → start Phase 4 at Tier 1 (optimize simple model)
 - Otherwise → start Phase 4 at Tier 2 (optimize tree models)
 - Phase 4 always escalates to next tier when current tier plateaus
+
+**Experience-accelerated start for Phase 4**:
+- **Score 7**: Start Phase 4 directly with proven model + HP config. Patience = 2.
+- **Score 5-6**: Use proven config as the FIRST attempt in Phase 4. Patience = 3.
 
 Print: `Baselines: {Model1} {score1} | {Model2} {score2} | {Model3} {score3}`
 Print: `Starting optimization at Tier {1|2} — {reason}`
@@ -211,10 +246,10 @@ Every `train_model` response now includes `score_trajectory` (all runs so far) a
 
 ### Time Tracking (MANDATORY on every line)
 
-After each `train_model` call, update the time tracker using the `training_time` field from the response:
-- `ELAPSED_TRAINING_TIME += training_time` (from the `train_model` response)
-- `remaining` = TIME_BUDGET_SECONDS - ELAPSED_TRAINING_TIME
-- `avg_run_time` = ELAPSED_TRAINING_TIME / runs_completed
+After each `train_model` call, read time from the response:
+- `ELAPSED_TIME = session_elapsed` (from the `train_model` response — wall-clock since first training call)
+- `remaining` = TIME_BUDGET_SECONDS - ELAPSED_TIME
+- `avg_run_time` = ELAPSED_TIME / runs_completed
 
 Format elapsed/remaining as human-readable: e.g., 65s → "1m05s", 400s → "6m40s".
 
