@@ -5,5 +5,8 @@
   "author": {
     "name": "Yuval Shalev"
   },
-  "homepage": "https://github.com/yuvalshalev/get-training-done"
+  "homepage": "https://github.com/yuvalshalev/get-training-done",
+  "repository": "https://github.com/yuvalshalev/get-training-done",
+  "license": "MIT",
+  "keywords": ["automl", "machine-learning", "optimization", "mcp", "data-science"]
 }

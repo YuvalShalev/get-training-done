@@ -12,8 +12,7 @@ Train and optimize ML models the way a senior data scientist would — with data
 ## Quick Start
 
 ```bash
-# In Claude Code
-/install-plugin https://github.com/yuvalshalev/get-training-done
+claude plugin install https://github.com/yuvalshalev/get-training-done
 ```
 
 Then:
@@ -117,7 +116,18 @@ See the [examples/](examples/) directory for detailed walkthroughs:
 
 ## Alternative Installation
 
-### From PyPI
+### Interactive Plugin Manager
+
+Inside Claude Code, type `/plugins`, then add the repo URL.
+
+### Local Development
+
+```bash
+git clone https://github.com/yuvalshalev/get-training-done.git
+claude --plugin-dir ./get-training-done
+```
+
+### From PyPI (standalone, without plugin features)
 
 ```bash
 pip install get-training-done
