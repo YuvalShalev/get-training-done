@@ -133,6 +133,14 @@ After the first `train_model` call, check if `strategy_recommendation` is presen
 | **≤ 4** (task only) | Loosely related | Run Phase 2 normally. Use as hints only. Patience = 3. |
 | **None** | No match | Run all phases normally. |
 
+Each recommendation includes:
+- `match_score`: similarity score (1-7)
+- `best`: model name and score (e.g., "xgboost 0.923 (accuracy)")
+- `best_hyperparameters`: dict of proven HPs (e.g., `{"learning_rate": 0.05, "max_depth": 8, ...}`)
+- `strategy_sequence_raw`: optimization path taken
+
+When score >= 5 and `best_hyperparameters` is non-empty, use those exact HPs as the starting config in Phase 4.
+
 Use the highest `match_score` from the first recommendation (they are sorted best-first).
 
 Print format:
@@ -140,9 +148,18 @@ Print format:
 - Score 5-6: `⚡ Moderate match (score {n}): {description}. Using as starting config.`
 - Score ≤ 4: `📋 Weak match (score {n}): {description}. Using as hint only.`
 
-If the first `train_model` response includes `prior_knowledge`, read it carefully. This contains synthesized insights from past sessions. Use these to inform your model selection and hyperparameter choices throughout Phase 4.
+If the first `train_model` response includes `prior_knowledge`, extract the following:
+- **Best model family** and its score (e.g., "XGBoost was best performer at 72.7%")
+- **Models to avoid** — any model explicitly called inferior, slow, or failing (e.g., "Random Forest was ~3.5% behind")
+- **Key hyperparameters** that worked (e.g., "learning_rate=0.05, max_depth=8")
 
-Store the experience check result (match score and recommendations) for use in Phase 2 and Phase 3b.
+These become **HARD CONSTRAINTS** for Phases 3b and 4:
+- Do NOT train models identified as inferior in Phase 3b (unless no better option exists)
+- Do NOT spend Phase 4 budget optimizing a model that `prior_knowledge` says is worse
+- Start Phase 4 with the proven best model family
+- Treat `prior_knowledge` model rankings with the same authority as `strategy_recommendation`
+
+Store the experience check result (match score, recommendations, and prior_knowledge constraints) for use in Phase 2, Phase 3b, and Phase 4.
 
 ---
 
@@ -204,8 +221,10 @@ Print: `## Phase 3b: Remaining Baselines`
 
 Train tree-based models using the same workspace (always pass `train_data_path` as `data_path`):
 
-- **If Experience Check score = 7** and the proven best model is tree-based: train ONLY that model family (e.g., if proven best is `xgboost`, skip `random_forest` and vice versa).
-- **Otherwise**: Train both:
+- **If Experience Check score = 7**: Train ONLY the proven best model family (e.g., if proven best is `xgboost`, skip `random_forest` and vice versa).
+- **If Experience Check score 5-6**: Train the proven best model + one alternative boosting model. Skip model families that `prior_knowledge` identifies as inferior (e.g., if `prior_knowledge` says "Random Forest was 3.5% behind", skip it).
+- **If `prior_knowledge` identifies best/worst models** (regardless of `match_score`): Prioritize the best model families. Skip any model explicitly called inferior or failing. This applies even when `match_score` is low or absent — `prior_knowledge` text is authoritative.
+- **Otherwise** (no experience, no prior_knowledge): Train both:
   - A random forest (`random_forest`) with defaults
   - Best boosting model (`xgboost` or `lightgbm`) with defaults
 
@@ -285,7 +304,12 @@ Standard HPO for tree models (recommended tuning order):
 3. `subsample` + `colsample_bytree` (reduces overfitting)
 4. `reg_alpha` + `reg_lambda` (L1/L2 regularization)
 
-Try multiple model families: xgboost, lightgbm, catboost, random_forest, extra_trees.
+Try model families in priority order:
+1. **Prior-knowledge best** (if available) — always start here
+2. Other gradient boosting variants (xgboost, lightgbm, catboost)
+3. Random forest / extra_trees — ONLY if time permits AND `prior_knowledge` doesn't flag them as inferior
+
+If `prior_knowledge` or `strategy_recommendation` identifies a model as significantly worse (>2% gap), skip it entirely.
 
 **Escalate to Tier 3 when**: patience exhausted AND remaining time > avg_run_time * 3
 
@@ -320,6 +344,16 @@ This tier uses insights from Phase 2 research AND additional targeted research:
 ### Optimization Decision Protocol
 
 After each training run within any tier, follow this structured protocol:
+
+#### Step -1: Prior Knowledge Model Priority
+
+If `prior_knowledge` or `strategy_recommendation` identified specific models:
+
+1. **Budget allocation**: Spend 80% of remaining time on the proven best model family. Only explore alternatives with the remaining 20%.
+2. **Model switching**: Do NOT switch to a model family that `prior_knowledge` identified as inferior, even if the current model plateaus. Instead, try deeper HP tuning or feature engineering on the proven model.
+3. **Escalation override**: When escalating tiers, always start with the prior-knowledge-recommended model, not an arbitrary one from the tier.
+
+This step is checked ONCE at the start of Phase 4 and constrains all subsequent decisions. Revisit only if the proven model performs significantly worse than expected (>5% below its prior_knowledge score).
 
 #### Step 0: Error-Informed Decision
 
