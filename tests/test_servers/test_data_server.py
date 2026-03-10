@@ -187,12 +187,28 @@ class TestComputeCorrelations:
         assert "correlation_matrix" in result
         matrix = result["correlation_matrix"]
         assert isinstance(matrix, dict)
+        assert len(matrix) > 0
         for col_name, col_vals in matrix.items():
             assert isinstance(col_vals, dict)
 
     def test_spearman_method(self, iris_csv: Path) -> None:
         result = data_profiler.compute_correlations(str(iris_csv), "petal_length", "spearman")
         assert "feature_target_correlations" in result
+
+    def test_include_matrix_false_omits_matrix(self, iris_csv: Path) -> None:
+        result = data_profiler.compute_correlations(str(iris_csv), "petal_length", "pearson", include_matrix=False)
+        assert result["correlation_matrix"] == {}
+        assert len(result["top_correlated_pairs"]) > 0
+        assert len(result["feature_target_correlations"]) > 0
+
+    def test_include_matrix_true_returns_full_output(self, iris_csv: Path) -> None:
+        result = data_profiler.compute_correlations(str(iris_csv), "petal_length", "pearson", include_matrix=True)
+        assert len(result["correlation_matrix"]) > 0
+        assert len(result["top_correlated_pairs"]) > 0
+
+    def test_default_includes_matrix(self, iris_csv: Path) -> None:
+        result = data_profiler.compute_correlations(str(iris_csv), "petal_length", "pearson")
+        assert len(result["correlation_matrix"]) > 0
 
     def test_invalid_method_raises(self, iris_csv: Path) -> None:
         with pytest.raises(ValueError, match="Unsupported correlation method"):

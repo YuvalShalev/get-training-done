@@ -184,6 +184,7 @@ def compute_correlations(
     path: str,
     target_column: str,
     method: str = "pearson",
+    include_matrix: bool = True,
 ) -> dict[str, Any]:
     """Compute statistical relationships between features and with the target.
 
@@ -191,10 +192,12 @@ def compute_correlations(
         path: Path to the CSV file.
         target_column: Name of the target/label column.
         method: Correlation method - 'pearson', 'spearman', or 'kendall'.
+        include_matrix: Whether to include the full NxN correlation matrix.
+            When False, the matrix is omitted to reduce response size.
 
     Returns:
         Dict with feature-target correlations, top correlated pairs,
-        and the full correlation matrix as nested dicts.
+        and the correlation matrix (empty dict when include_matrix is False).
     """
     df = load_csv(path)
     _validate_column_exists(df, target_column)
@@ -232,13 +235,14 @@ def compute_correlations(
 
     sorted_pairs = sorted(pairs, key=lambda x: abs(x[2]), reverse=True)
 
-    # Full matrix as dict of dicts
+    # Full matrix as dict of dicts — omit when include_matrix is False
     matrix_dict: dict[str, dict[str, float]] = {}
-    for col in cols:
-        matrix_dict[col] = {
-            other: _to_native(corr_matrix.loc[col, other])
-            for other in cols
-        }
+    if include_matrix:
+        for col in cols:
+            matrix_dict[col] = {
+                other: _to_native(corr_matrix.loc[col, other])
+                for other in cols
+            }
 
     return {
         "feature_target_correlations": feature_target,

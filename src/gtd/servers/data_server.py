@@ -92,19 +92,21 @@ async def compute_correlations(
     path: str,
     target_column: str,
     method: str = "pearson",
+    include_matrix: bool = True,
 ) -> str:
     """Compute statistical relationships between features and with the target.
 
     Returns feature-target correlations, top correlated feature pairs,
-    and the full correlation matrix.
+    and optionally the full NxN correlation matrix.
 
     Args:
         path: Path to the CSV file.
         target_column: Name of the target/label column.
         method: Correlation method - 'pearson', 'spearman', or 'kendall'.
+        include_matrix: Include full correlation matrix (default true). Set false to omit.
     """
     try:
-        result = data_profiler.compute_correlations(path, target_column, method)
+        result = data_profiler.compute_correlations(path, target_column, method, include_matrix)
         return _json_response(result)
     except Exception as exc:
         return _error_response(exc)
