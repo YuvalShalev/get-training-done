@@ -38,8 +38,8 @@ def search_kaggle_datasets(query: str, max_results: int = 10) -> dict[str, Any]:
         response = requests.get(
             f"{KAGGLE_API_BASE}/datasets/list",
             params=params,
-            auth=auth,
             timeout=REQUEST_TIMEOUT,
+            **_auth_kwargs(auth),
         )
         response.raise_for_status()
     except requests.exceptions.Timeout:
@@ -100,8 +100,8 @@ def search_kaggle_notebooks(
         response = requests.get(
             f"{KAGGLE_API_BASE}/kernels/list",
             params=params,
-            auth=auth,
             timeout=REQUEST_TIMEOUT,
+            **_auth_kwargs(auth),
         )
         response.raise_for_status()
     except requests.exceptions.Timeout:
@@ -119,7 +119,7 @@ def search_kaggle_notebooks(
     return _parse_notebooks_response(response.json(), query)
 
 
-def _get_kaggle_auth() -> tuple[str, str] | None:
+def _get_kaggle_auth() -> dict[str, Any] | None:
     """Retrieve Kaggle credentials from environment or kaggle.json.
 
     Checks in order:
@@ -127,13 +127,15 @@ def _get_kaggle_auth() -> tuple[str, str] | None:
     2. ~/.kaggle/kaggle.json file
 
     Returns:
-        Tuple of (username, key) for HTTP basic auth, or None if not found.
+        Dict with auth info: either ``{"type": "bearer", "key": key}`` for
+        ``KGAT_`` prefixed tokens, or ``{"type": "basic", "username": ...,
+        "key": ...}`` for legacy keys.  Returns ``None`` if not found.
     """
     username = os.environ.get("KAGGLE_USERNAME")
     key = os.environ.get("KAGGLE_KEY")
 
     if username and key:
-        return (username, key)
+        return _classify_auth(username, key)
 
     kaggle_json_path = Path.home() / ".kaggle" / "kaggle.json"
     if kaggle_json_path.exists():
@@ -143,11 +145,25 @@ def _get_kaggle_auth() -> tuple[str, str] | None:
             stored_username = creds.get("username")
             stored_key = creds.get("key")
             if stored_username and stored_key:
-                return (stored_username, stored_key)
+                return _classify_auth(stored_username, stored_key)
         except (json.JSONDecodeError, OSError):
             return None
 
     return None
+
+
+def _classify_auth(username: str, key: str) -> dict[str, Any]:
+    """Classify credentials as bearer-token or legacy basic auth."""
+    if key.startswith("KGAT_"):
+        return {"type": "bearer", "key": key}
+    return {"type": "basic", "username": username, "key": key}
+
+
+def _auth_kwargs(auth_info: dict[str, Any]) -> dict[str, Any]:
+    """Build requests kwargs for the given auth info."""
+    if auth_info["type"] == "bearer":
+        return {"headers": {"Authorization": f"Bearer {auth_info['key']}"}}
+    return {"auth": (auth_info["username"], auth_info["key"])}
 
 
 def diagnose_kaggle_credentials() -> str | None:

@@ -200,7 +200,7 @@ class TestSearchKaggleDatasets:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_successful_search(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_KAGGLE_DATASETS_JSON
@@ -217,7 +217,7 @@ class TestSearchKaggleDatasets:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_result_structure(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_KAGGLE_DATASETS_JSON
@@ -244,7 +244,7 @@ class TestSearchKaggleDatasets:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_timeout_returns_error(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_get.side_effect = requests.exceptions.Timeout("Connection timed out")
 
         result = kaggle_client.search_kaggle_datasets("iris")
@@ -255,7 +255,7 @@ class TestSearchKaggleDatasets:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_auth_failure_returns_error(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("bad_user", "bad_key")
+        mock_auth.return_value = {"type": "basic", "username": "bad_user", "key": "bad_key"}
         mock_response = Mock()
         mock_response.status_code = 401
         http_error = requests.exceptions.HTTPError(response=mock_response)
@@ -274,7 +274,7 @@ class TestSearchKaggleNotebooks:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_successful_search(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_KAGGLE_NOTEBOOKS_JSON
@@ -290,7 +290,7 @@ class TestSearchKaggleNotebooks:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_result_structure(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_KAGGLE_NOTEBOOKS_JSON
@@ -309,7 +309,7 @@ class TestSearchKaggleNotebooks:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_sort_by_parameter_passed(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = SAMPLE_KAGGLE_NOTEBOOKS_JSON
@@ -333,7 +333,7 @@ class TestSearchKaggleNotebooks:
     @patch("gtd.research.kaggle_client._get_kaggle_auth")
     @patch("gtd.research.kaggle_client.requests.get")
     def test_connection_error_returns_error(self, mock_get: Mock, mock_auth: Mock) -> None:
-        mock_auth.return_value = ("test_user", "test_key")
+        mock_auth.return_value = {"type": "basic", "username": "test_user", "key": "test_key"}
         mock_get.side_effect = requests.exceptions.ConnectionError("No route")
 
         result = kaggle_client.search_kaggle_notebooks("titanic")
