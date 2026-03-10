@@ -16,7 +16,7 @@ You MUST follow ALL of these. Violations are unacceptable:
 3. **All questions to the user MUST use the AskUserQuestion tool.** Never ask questions in plain text.
 4. **Phase 1 confirmation**: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?"
 5. **Compact output**: Single-line formats. No tables unless the user asks for one.
-6. **No reasoning before decisions**. Act, then report the result in one line.
+6. **Be concise**. One line per run result. Save extended reasoning for reflection checkpoints.
 7. **Session synthesis is mandatory**. You MUST call `synthesize_session` before `register_model` in Phase 5. `register_model` will reject if you skip this.
 
 ## Self-Learning
@@ -125,12 +125,7 @@ Print: `## Phase 1.5: Data Partitioning`
 Before any training, split the data into train and validation partitions.
 The validation set is held out for ALL evaluation — it is NEVER used for training.
 
-1. Decide the split strategy based on the EDA summary recommendations:
-   - If EDA recommends "temporal split recommended" → `strategy="temporal"` (prevents temporal leakage)
-   - If classification with class imbalance → `strategy="stratified"` (preserves class distribution)
-   - If data has a group/ID column (e.g., customer_id, patient_id) → `strategy="group"` (prevents group leakage)
-   - Regression without special structure → `strategy="random"`
-   - Default → `strategy="stratified"` for classification, `"random"` for regression
+1. Choose a split strategy based on EDA findings. Consider temporal structure (prevents leakage), class balance (stratified preserves distribution), and group columns (prevents group leakage). Explain your choice in the print line.
 
 2. Call `create_data_split` (gtd-data server)
 3. Use `train_data_path` for all `train_model` calls (Phase 3-4)
@@ -160,50 +155,15 @@ Print: `#1 {Model} → {score} | ⏱ {elapsed} / {budget}`
 
 ### Experience Check
 
-After the first `train_model` call, check if `strategy_recommendation` is present in the response. Each recommendation includes a `match_score` (1-7) indicating similarity to past datasets:
+After the first `train_model` call, check if `strategy_recommendation` is present in the response. The first response may include `strategy_recommendation` (with `match_score` 1-7, `best`, `best_hyperparameters`) and `prior_knowledge` text. These are insights from past sessions on similar datasets. Stronger matches deserve more trust. Use them to inform your approach to research, baselines, and optimization. Print a one-line summary.
 
-| Match Score | Label | Actions |
-|-------------|-------|---------|
-| **7** (task+size+feature) | Very similar | Skip Phase 2. Skip non-proven tree baseline in Phase 3b. Start Phase 4 with proven model+HPs. Patience = 2. |
-| **5-6** (task+size OR task+feature) | Similar | Skip Phase 2. Run all baselines in Phase 3b. Use proven config as first Phase 4 attempt. Patience = 3. |
-| **≤ 4** (task only) | Loosely related | Run Phase 2 normally. Use as hints only. Patience = 3. |
-| **None** | No match | Run all phases normally. |
-
-Each recommendation includes:
-- `match_score`: similarity score (1-7)
-- `best`: model name and score (e.g., "xgboost 0.923 (accuracy)")
-- `best_hyperparameters`: dict of proven HPs (e.g., `{"learning_rate": 0.05, "max_depth": 8, ...}`)
-- `strategy_sequence_raw`: optimization path taken
-
-When score >= 5 and `best_hyperparameters` is non-empty, use those exact HPs as the starting config in Phase 4.
-
-Use the highest `match_score` from the first recommendation (they are sorted best-first).
-
-Print format:
-- Score 7: `⚡ Strong match (score 7): {description} → {best}. Accelerating with proven strategy.`
-- Score 5-6: `⚡ Moderate match (score {n}): {description}. Using as starting config.`
-- Score ≤ 4: `📋 Weak match (score {n}): {description}. Using as hint only.`
-
-If the first `train_model` response includes `prior_knowledge`, extract the following:
-- **Best model family** and its score (e.g., "XGBoost was best performer at 72.7%")
-- **Models to avoid** — any model explicitly called inferior, slow, or failing (e.g., "Random Forest was ~3.5% behind")
-- **Key hyperparameters** that worked (e.g., "learning_rate=0.05, max_depth=8")
-
-These become **HARD CONSTRAINTS** for Phases 3b and 4:
-- Do NOT train models identified as inferior in Phase 3b (unless no better option exists)
-- Do NOT spend Phase 4 budget optimizing a model that `prior_knowledge` says is worse
-- Start Phase 4 with the proven best model family
-- Treat `prior_knowledge` model rankings with the same authority as `strategy_recommendation`
-
-Store the experience check result (match score, recommendations, and prior_knowledge constraints) for use in Phase 2, Phase 3b, and Phase 4.
+Store the experience check result for use in Phase 2, Phase 3b, and Phase 4.
 
 ---
 
 ## Phase 2: Research (Conditional)
 
-**If Experience Check score ≥ 5, skip this phase entirely.** Print: `Skipping research — strong experience match available.`
-
-Otherwise, use AskUserQuestion: "Run external research (arXiv + Kaggle)? Kaggle requires API credentials. (yes/no)"
+Decide whether external research would add value given what you know from EDA and prior experience. Strong prior knowledge may make research redundant. If you decide to skip, print the reason. Otherwise, use AskUserQuestion: "Run external research (arXiv + Kaggle)? Kaggle requires API credentials. (yes/no)"
 
 **If the user says no** (or any negative response): skip this phase entirely and proceed to Phase 3b.
 
@@ -255,34 +215,20 @@ Research: (1) {model_families} dominate for {data_type} (2) {technique} for {iss
 
 Print: `## Phase 3b: Remaining Baselines`
 
-### Tier 2: Tree-based baselines
+### Baselines
 
-Train tree-based models using the same workspace (always pass `train_data_path` as `data_path`):
+Train 1-3 baseline models to establish benchmarks. Choose based on dataset characteristics, prior experience, and EDA complexity. Available levels: simple (logistic/linear), tree-based (RF, XGBoost, LightGBM, CatBoost), advanced (MLP, stacking). Don't waste runs on models that prior knowledge flags as poor fits.
 
-- **If Experience Check score = 7**: Train ONLY the proven best model family (e.g., if proven best is `xgboost`, skip `random_forest` and vice versa).
-- **If Experience Check score 5-6**: Train the proven best model + one alternative boosting model. Skip model families that `prior_knowledge` identifies as inferior (e.g., if `prior_knowledge` says "Random Forest was 3.5% behind", skip it).
-- **If `prior_knowledge` identifies best/worst models** (regardless of `match_score`): Prioritize the best model families. Skip any model explicitly called inferior or failing. This applies even when `match_score` is low or absent — `prior_knowledge` text is authoritative.
-- **Otherwise** (no experience, no prior_knowledge): Train both:
-  - A random forest (`random_forest`) with defaults
-  - Best boosting model (`xgboost` or `lightgbm`) with defaults
+Always pass `train_data_path` as `data_path`.
 
 Print each with timer: `#2 {Model} → {score} | ⏱ {elapsed} / {budget}`
 
-If the first `train_model` response included `strategy_recommendation`, use those strategies as starting points in Phase 4 instead of defaults.
+### Optimization Focus
 
-### Evaluate tier positioning
-
-After baselines, determine where to focus optimization:
-- If Tier 1 score is within 2% of Tier 2 best → start Phase 4 at Tier 1 (optimize simple model)
-- Otherwise → start Phase 4 at Tier 2 (optimize tree models)
-- Phase 4 always escalates to next tier when current tier plateaus
-
-**Experience-accelerated start for Phase 4**:
-- **Score 7**: Start Phase 4 directly with proven model + HP config. Patience = 2.
-- **Score 5-6**: Use proven config as the FIRST attempt in Phase 4. Patience = 3.
+Based on baseline results, decide which model family to optimize. Consider relative scores, prior experience, and dataset complexity.
 
 Print: `Baselines: {Model1} {score1} | {Model2} {score2} | {Model3} {score3}`
-Print: `Starting optimization at Tier {1|2} — {reason}`
+Print: `Optimization focus: {model} — {reason}`
 
 **CONTEXT RULE**: From this point forward, reference ONLY the baselines summary above. Do NOT repeat or include individual run JSONs from this phase in any subsequent message.
 
@@ -322,135 +268,40 @@ Examples:
 #12 Stack(XGB+RF+LR) → 0.921 (+0.004) ★ new best ⏱ 7m15s/10m [2m45s left]
 ```
 
-### Tier 1: Simple Model Optimization
+### Optimization Protocol
 
-Optimize the simple model (`logistic_regression` / `linear_regression` / `elasticnet`):
-- Regularization tuning (C, alpha, l1_ratio)
-- Feature selection (drop low-importance features)
-- Feature engineering (interactions for key features found in correlations)
+You are a data scientist optimizing a model. You have the full context: EDA findings,
+prior experience, research insights, baseline scores, and the `score_trajectory` from
+each `train_model` response.
 
-**Escalate to Tier 2 when**: patience exhausted (3 runs no improvement) OR complexity is COMPLEX
+After each run:
 
-When escalating, print:
-`→ Tier 1 plateau at {score}. Escalating to Tier 2 — tree-based optimization ⏱ {remaining} left`
+1. **Analyze**: Call `analyze_errors` on the current best run. Read the results,
+   error analysis, and score trajectory. What is working? What is not?
+2. **Decide**: Choose your next move — hyperparameter tuning, model switch, feature
+   engineering, regularization, ensemble/stacking, or research-informed techniques.
+3. **Act**: Make 1-2 changes per run. More changes make it hard to attribute improvements.
+4. **Report**: Print the result in the standard per-run format.
 
-### Tier 2: Tree-Based Optimization
+When comparing runs, call `test_significance` and note significance if p < 0.05.
 
-Standard HPO for tree models (recommended tuning order):
-1. `learning_rate` + `n_estimators` (most impactful — try 0.01, 0.05 with proportionally more `n_estimators`)
-2. `max_depth` / `num_leaves` (controls complexity)
-3. `subsample` + `colsample_bytree` (reduces overfitting)
-4. `reg_alpha` + `reg_lambda` (L1/L2 regularization)
+#### Guidance (not rules)
 
-Try model families in priority order:
-1. **Prior-knowledge best** (if available) — always start here
-2. Other gradient boosting variants (xgboost, lightgbm, catboost)
-3. Random forest / extra_trees — ONLY if time permits AND `prior_knowledge` doesn't flag them as inferior
+These are patterns experienced data scientists use. They are not prescriptions:
+- High CV variance often signals overfitting — consider regularization or simpler models
+- Plateaus after several runs may mean the model family is exhausted — try a different
+  family or feature engineering
+- Error analysis revealing specific weak segments suggests targeted feature engineering
+- Prior experience that strongly matches this dataset deserves significant trust
+- Ensemble approaches are most valuable when diverse base models exist
+- Diminishing returns are real — small improvements after many runs suggest stopping
 
-If `prior_knowledge` or `strategy_recommendation` identifies a model as significantly worse (>2% gap), skip it entirely.
+#### Stopping
 
-**Escalate to Tier 3 when**: patience exhausted AND remaining time > avg_run_time * 3
+Stop when further runs are unlikely to improve results meaningfully. Consider time
+remaining, score trajectory, diminishing returns, and whether a target metric is met.
 
-When escalating, print:
-`→ Tier 2 plateau at {score}. Escalating to Tier 3 — advanced approaches ⏱ {remaining} left`
-
-### Tier 3: Advanced Approaches (research-driven)
-
-This tier uses insights from Phase 2 research AND additional targeted research:
-
-1. **Research-informed models**: If Phase 2 research found specific approaches
-   (e.g., a Kaggle notebook using TabNet, a paper recommending CatBoost with
-   specific settings for this data type), try those first.
-
-2. **Stacking/Ensembling**: Build stacked ensembles combining the best models
-   from Tiers 1 and 2. Use `train_model` with the best configs, then ensemble
-   predictions via feature engineering + a meta-learner.
-
-3. **Neural networks**: Try `mlp_classifier` / `mlp_regressor` with architecture
-   search (hidden layer sizes, activation functions).
-
-4. **Advanced feature engineering**: Based on error analysis insights —
-   create interaction features, polynomial features, or domain-specific
-   transforms that target weak segments identified by `analyze_errors`.
-
-5. **Additional research**: If time remains, call `search_arxiv` or
-   `search_kaggle_notebooks` with refined queries based on what you've
-   learned about the dataset's challenges. Apply any novel techniques found.
-
-**If time runs out during any tier**: Stop and proceed to Phase 5 with best result so far.
-
-### Optimization Decision Protocol
-
-After each training run within any tier, follow this structured protocol:
-
-#### Step -1: Prior Knowledge Model Priority
-
-If `prior_knowledge` or `strategy_recommendation` identified specific models:
-
-1. **Budget allocation**: Spend 80% of remaining time on the proven best model family. Only explore alternatives with the remaining 20%.
-2. **Model switching**: Do NOT switch to a model family that `prior_knowledge` identified as inferior, even if the current model plateaus. Instead, try deeper HP tuning or feature engineering on the proven model.
-3. **Escalation override**: When escalating tiers, always start with the prior-knowledge-recommended model, not an arbitrary one from the tier.
-
-This step is checked ONCE at the start of Phase 4 and constrains all subsequent decisions. Revisit only if the proven model performs significantly worse than expected (>5% below its prior_knowledge score).
-
-#### Step 0: Error-Informed Decision
-
-After each run, call `analyze_errors` with the current best run to understand where the model fails (omit `data_path` to auto-use the validation partition). Use this to guide the next action:
-- If error analysis shows a specific segment with high error rate → suggest feature engineering or model change targeting that segment
-- If improvement is not statistically significant (call `test_significance` with CV scores) → don't count it toward patience, keep exploring
-
-If deep analysis insights are available from the last reflexion (Step 5), use the `top_recommendation` to prioritize your next action.
-
-#### Step 1: Diagnose
-
-Examine the results from `train_model`:
-- `cv_scores` array: compute std. If std > 5% of mean → **overfitting signal**
-- `mean_score` vs best previous run: delta > +0.5% → **improving**, |delta| < 0.5% → **plateau**, delta < -1% → **degrading**
-- If best score is still close to baseline after 3+ optimization runs → **model family may be wrong**
-
-Use `score_trajectory` from the response to identify trends without needing separate calls.
-
-#### Step 2: Classify & Act
-
-Based on diagnosis, pick ONE action:
-
-| Diagnosis | Action | Parameter Changes |
-|-----------|--------|-------------------|
-| **Overfitting** | Increase regularization | Boosting: reg_alpha/reg_lambda 2-5x, max_depth -2, min_child_weight +5. RF: min_samples_leaf +5, max_depth -3 |
-| **Underfitting** | Increase capacity | Boosting: n_estimators +50%, max_depth +2, learning_rate /2. RF: n_estimators +100, max_depth +5 |
-| **Improving** | Continue same direction | Push same parameter further (1.5-2x step) |
-| **Plateau** (2 runs) | Switch strategy | Different model family, feature engineering, or big parameter jump |
-| **Degrading** | Revert and try different axis | Return to best config, change a DIFFERENT parameter |
-
-#### Step 3: Apply
-
-- First change: moderate step (2x or /2)
-- If moderate didn't help: aggressive step (5-10x or boundary values)
-- Use hyperparameter ranges from `list_available_models`
-- Change at most 1-2 parameters per run
-
-#### Step 4: Log
-
-Per-run output — single line each, always including the timer:
-
-```
-#{n} {Model} {change_description} → {score} ({delta}) {significance_note} {best_marker} ⏱ {elapsed}/{budget} [{remaining} left]
-```
-
-When comparing runs, call `test_significance` and include significance in the line if p < 0.05.
-After each run, call `analyze_errors` and include the top error segment if notably different from overall.
-
-No growing table. Runs >5 old get summarized: `Runs 1-5: best #4 at 0.879`
-
-### Stopping Criteria
-
-Stop when any condition is met:
-
-- **Time up**: estimated time for next run > remaining time
-- **Patience exhausted at Tier 3**: No improvement after exploring advanced approaches
-- **Target achieved**: Target metric exceeded
-
-Print: `⏱ Stopping: {reason} | Total: {elapsed} | Runs: {n}`
+Print: `Stopping: {reason} | Total: {elapsed} | Runs: {n}`
 
 **CONTEXT RULE (every 3 runs)**: Compact runs older than the 3 most recent into a single line: `Runs {start}-{end}: best was #{n} at {score} ({model})`. From this point forward, reference ONLY that summary for older runs. Do NOT repeat their individual run details.
 

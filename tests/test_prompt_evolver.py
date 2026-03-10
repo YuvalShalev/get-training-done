@@ -208,7 +208,7 @@ class TestInjectIntoTrainMd:
 
         train_md = tmp_path / "train.md"
         train_md.write_text(
-            "# Phase 4\n\nSome content here.\n\n### Stopping Criteria\n\nStop when done.\n"
+            "# Phase 4\n\nSome content here.\n\n#### Stopping\n\nStop when done.\n"
         )
 
         instructions = {
@@ -225,13 +225,13 @@ class TestInjectIntoTrainMd:
         content = train_md.read_text()
         assert "DSPy-Optimized Decision Guidance" in content
         assert "Always start with LightGBM" in content
-        assert "### Stopping Criteria" in content
+        assert "#### Stopping" in content
 
     def test_creates_backup(self, tmp_path: Path):
         from gtd.core.prompt_evolver import inject_into_train_md
 
         train_md = tmp_path / "train.md"
-        original = "# Phase 4\n\n### Stopping Criteria\n\nStop.\n"
+        original = "# Phase 4\n\n#### Stopping\n\nStop.\n"
         train_md.write_text(original)
 
         inject_into_train_md({"decide_step": "test"}, str(train_md), backup=True)
@@ -259,7 +259,7 @@ class TestInjectIntoTrainMd:
         from gtd.core.prompt_evolver import inject_into_train_md
 
         train_md = tmp_path / "train.md"
-        train_md.write_text("# Phase 4\n\n### Stopping Criteria\n\nStop.\n")
+        train_md.write_text("# Phase 4\n\n#### Stopping\n\nStop.\n")
 
         result = inject_into_train_md(
             {"decide_step": "test"}, str(train_md), backup=False,

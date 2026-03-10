@@ -322,8 +322,8 @@ def inject_into_train_md(
             )
     injection += "\n"
 
-    # Insert before "### Stopping Criteria"
-    marker = "### Stopping Criteria"
+    # Insert before "#### Stopping"
+    marker = "#### Stopping"
     if marker in content:
         content = content.replace(marker, injection + marker)
         path.write_text(content, encoding="utf-8")
