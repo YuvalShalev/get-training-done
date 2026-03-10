@@ -49,6 +49,21 @@ Parse `DURATION` into `TIME_BUDGET_SECONDS` (e.g., "5m" → 300, "1.5h" → 5400
 
 Print: `## Phase 1: Data Understanding`
 
+### Load User Context
+
+Check for a context artifact: `.gtd-context-{data_filename_without_extension}.json` in the same directory as DATA_PATH.
+
+Example: for `~/data/titanic.csv` → `~/data/.gtd-context-titanic.json`
+
+Use the Read tool to check if this file exists.
+
+**If found**:
+- Parse the JSON and extract the `domain` and `keywords` fields
+- Print: `Loading user context: {domain}`
+- Store the `domain` and `keywords` for use in Phase 2 research queries
+
+**If not found**: Continue without context. No message needed.
+
 ### Check for existing EDA results
 
 Derive the artifact filename: `.gtd-eda-{data_filename_without_extension}.json` in the same directory as DATA_PATH.
@@ -219,8 +234,10 @@ Before calling Kaggle, check if credentials exist by calling `search_kaggle_note
 
 ### Research Queries
 
-1. Call `search_arxiv` (gtd-research server) with a query describing the dataset characteristics — no credentials needed
-2. Call `search_kaggle_notebooks` with a query about similar datasets or problem types — requires Kaggle API credentials (skip if credentials unavailable per above)
+When constructing research queries, incorporate user context if it was loaded in Phase 1. Instead of generic queries like "tabular classification 12 features", use the domain description and keywords. Example: without context → `"tabular classification 12 features"`, with context → `"vehicle health prediction sensor data classification"`.
+
+1. Call `search_arxiv` (gtd-research server) with a query describing the dataset — use domain keywords from context if available, otherwise describe dataset characteristics. No credentials needed.
+2. Call `search_kaggle_notebooks` with a query about similar datasets or problem types — use domain keywords from context if available. Requires Kaggle API credentials (skip if credentials unavailable per above).
 
 If either call returns a non-credential error (network timeout, HTTP error), print the error on one line and continue with whatever results you got. Do NOT retry or block on research failures.
 

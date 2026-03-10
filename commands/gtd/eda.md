@@ -32,6 +32,24 @@ If `--workspace` is provided, write a `session_start.txt` file to that directory
 
 ---
 
+## Pre-Analysis: Load User Context
+
+Before running any tools, check for a context artifact: `.gtd-context-{data_filename_without_extension}.json` in the same directory as DATA_PATH.
+
+Example: for `~/data/titanic.csv` → `~/data/.gtd-context-titanic.json`
+
+Use the Read tool to check if this file exists.
+
+**If found**:
+- Parse the JSON and extract the `domain` and `keywords` fields
+- Print: `Loading user context: {domain}`
+- Store the context for use in analysis — let it influence your findings and recommendations (e.g., if user says "time-dependent", emphasize temporal analysis; if "sensor data", focus on multicollinearity and signal patterns)
+- The context will be added to the artifact and passed to `compute_dataset_fingerprint`
+
+**If not found**: Continue without context. No message needed.
+
+---
+
 ## Your Statistical Toolkit
 
 ### Always run first:
@@ -119,6 +137,8 @@ Use the Write tool to save a JSON file with this structure:
   "target_column": "<target column name>",
   "task_type": "<classification|regression|binary_classification|multiclass_classification>",
   "timestamp": "<current ISO 8601 timestamp>",
+  "dataset_description": "<2-4 sentence narrative description of the dataset — not stats, but what the data looks like>",
+  "user_context": { ... context artifact contents if loaded, omit if not present ... },
   "summary": {
     "rows": <n>, "cols": <n>,
     "n_numeric": <n>, "n_categorical": <n>,
@@ -135,6 +155,13 @@ Use the Write tool to save a JSON file with this structure:
 }
 ```
 
+The `dataset_description` should be a narrative summary — not a repetition of stats, but a human-readable description of what the dataset contains. Example:
+```
+"A passenger survival dataset with 891 rows and 12 features. Mix of demographics (age, sex), ticket info (fare, class), and embarkation data. ~20% missing values in Age, ~77% in Cabin. Binary classification target (Survived) with mild class imbalance (61/39 split)."
+```
+
+If user context was loaded in the pre-analysis step, include it as `"user_context"` in the artifact, and also pass the domain description into `eda_results` when calling `compute_dataset_fingerprint` (add a `"domain_context"` key to the `eda_results` dict).
+
 Populate `summary`, `findings`, and `recommendations` from the same data you use for the printed output below. This artifact enables `/gtd:train` to skip profiling when EDA has already been run.
 
 ---
@@ -145,6 +172,8 @@ After analysis, print a structured summary:
 
 ```
 ## EDA Summary
+
+{dataset_description}
 
 Data: {rows} x {cols} | {task_type} | Target: {target}
 Features: {n_numeric} numeric, {n_categorical} categorical
