@@ -45,9 +45,9 @@ Parse `DURATION` into `TIME_BUDGET_SECONDS` (e.g., "5m" → 300, "1.5h" → 5400
 
 ---
 
-## Phase 1: Data Understanding
+## Phase 1: Quick Profile & Split
 
-Print: `## Phase 1: Data Understanding`
+Print: `## Phase 1: Quick Profile & Split`
 
 ### Load User Context
 
@@ -64,6 +64,43 @@ Use the Read tool to check each location. Use the first one found.
 
 **If not found**: Continue without context. No message needed.
 
+### Quick Profile
+
+Call `profile_dataset` on DATA_PATH (with target column if provided via `--target`). This lightweight call returns: target column, task_type, column types, class balance, and basic statistics.
+
+If the profile suggests temporal structure may be present, also call `detect_timestamp_columns` on DATA_PATH.
+
+Extract from the profile:
+- `target`, `task_type`, column types, class balance
+- Whether temporal columns exist (for split strategy)
+
+### Target Confirmation
+
+Confirmation: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
+
+### Data Split
+
+Before any training or deep analysis, split the data into train and validation partitions.
+The validation set is held out for ALL evaluation — it is NEVER used for training or EDA.
+
+1. Choose a split strategy based on the quick profile. Consider temporal structure (prevents leakage), class balance (stratified preserves distribution), and group columns (prevents group leakage). Explain your choice in the print line.
+
+2. Call `create_data_split` (gtd-data server)
+3. Use `train_data_path` for all `train_model` calls (Phase 3-4)
+4. Use `validation_data_path` for all evaluation/analysis calls, or omit `data_path` to auto-discover
+
+Print: `Split: {strategy} | Train: {train_rows} rows | Validation: {val_rows} rows`
+
+**Note on feature engineering**: If `engineer_features` is used later, it must be applied to train and validation CSVs separately using the same operations, after the split.
+
+---
+
+## Phase 1.5: EDA (Train Split)
+
+Print: `## Phase 1.5: EDA (train split)`
+
+EDA runs on the **train split only** to prevent information leakage from validation data into feature engineering or model selection decisions.
+
 ### Check for existing EDA results
 
 Derive the artifact filename: `.gtd-eda-{data_filename_without_extension}.json` in the same directory as DATA_PATH.
@@ -73,19 +110,20 @@ Use the Read tool to check if this file exists.
 
 **If found**:
 - Read the file and parse the JSON
-- Extract: `task_type`, `target`, `summary` (complexity, signal, issues), `recommendations`, `fingerprint`
+- **Cache validation**: Check the `data_path` field in the artifact. Only use the cached results if `data_path` matches `train_data_path` (the train split), NOT the original DATA_PATH. If it points to the original full data path, discard the cache and re-run EDA on the train split.
+- If cache is valid: Extract `task_type`, `target`, `summary` (complexity, signal, issues), `recommendations`, `fingerprint`
 - Print: `Loading EDA results from prior analysis ({timestamp})...`
-- Print the summary section as-is, skip to target confirmation below
+- Print the summary section as-is
 
-**If not found**:
-- Run EDA tools directly:
-  1. Call `profile_dataset` with DATA_PATH and target column
-  2. Based on profile results, call additional EDA tools as needed (same adaptive logic as `/gtd:eda`)
+**If not found or cache invalid**:
+- Run EDA tools on `train_data_path` (NOT the original DATA_PATH):
+  1. Call `profile_dataset` with `train_data_path` and target column
+  2. Based on profile results, call additional EDA tools as needed (same adaptive logic as `/gtd:eda`), always passing `train_data_path`
   3. Call `compute_dataset_fingerprint` with accumulated findings as `eda_results`
 - Build the EDA artifact JSON:
   ```json
   {
-    "data_path": "<absolute path to data file>",
+    "data_path": "<absolute path to TRAIN SPLIT file>",
     "target_column": "<target>",
     "task_type": "<detected task type>",
     "timestamp": "<current ISO 8601 timestamp>",
@@ -108,32 +146,10 @@ Use the Read tool to check if this file exists.
 - Print structured summary
 
 Extract from the EDA output (whether loaded or freshly computed):
-- `task_type`, `target`, complexity, signal characteristics
-- Split strategy recommendation (temporal? stratified? etc.)
+- Complexity, signal characteristics
 - Dataset fingerprint (store for Phase 3a)
 
-Confirmation: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
-
 **CONTEXT RULE**: From this point forward, reference ONLY the EDA summary above. Do NOT repeat or include raw profiling JSON from this phase in any subsequent message.
-
----
-
-## Phase 1.5: Data Partitioning
-
-Print: `## Phase 1.5: Data Partitioning`
-
-Before any training, split the data into train and validation partitions.
-The validation set is held out for ALL evaluation — it is NEVER used for training.
-
-1. Choose a split strategy based on EDA findings. Consider temporal structure (prevents leakage), class balance (stratified preserves distribution), and group columns (prevents group leakage). Explain your choice in the print line.
-
-2. Call `create_data_split` (gtd-data server)
-3. Use `train_data_path` for all `train_model` calls (Phase 3-4)
-4. Use `validation_data_path` for all evaluation/analysis calls, or omit `data_path` to auto-discover
-
-Print: `Split: {strategy} | Train: {train_rows} rows | Validation: {val_rows} rows`
-
-**Note on feature engineering**: If `engineer_features` is used later, it must be applied to train and validation CSVs separately using the same operations, after the split.
 
 ---
 
