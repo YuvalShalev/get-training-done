@@ -86,7 +86,8 @@ If time is generous (>2m), go deep.
 2. **Assess** — Read the profile results and decide what's interesting
 3. **Investigate** — Call additional tools based on what you see
 4. **Fingerprint** — Call `compute_dataset_fingerprint` with your accumulated findings as `eda_results`
-5. **Summarize** — Print a structured summary
+5. **Persist** — Write the full EDA output to disk as a JSON artifact (see below)
+6. **Summarize** — Print a structured summary
 
 ### Collecting EDA Results for Fingerprint
 
@@ -103,6 +104,39 @@ eda_results = {
 ```
 
 Pass this as the `eda_results` JSON string parameter to `compute_dataset_fingerprint`.
+
+### Persisting EDA Results to Disk
+
+After computing the fingerprint, write the full EDA output as a JSON artifact for reuse by `/gtd:train`.
+
+**Artifact path**: `{DATA_DIR}/.gtd-eda-{data_filename_without_extension}.json`
+Example: for `~/data/titanic.csv` → `~/data/.gtd-eda-titanic.json`
+
+Use the Write tool to save a JSON file with this structure:
+
+```json
+{
+  "data_path": "<absolute path to the data file>",
+  "target_column": "<target column name>",
+  "task_type": "<classification|regression|binary_classification|multiclass_classification>",
+  "timestamp": "<current ISO 8601 timestamp>",
+  "summary": {
+    "rows": <n>, "cols": <n>,
+    "n_numeric": <n>, "n_categorical": <n>,
+    "missing_summary": "<human-readable missing data summary>",
+    "signal_summary": "<e.g. strong linear (max r=0.78) or weak linear, moderate nonlinear (MI)>",
+    "issues": ["missing_values", "class_imbalance", ...],
+    "complexity": "<SIMPLE|MODERATE|COMPLEX>",
+    "complexity_reason": "<reason based on your analysis>"
+  },
+  "findings": ["<key finding 1>", "<key finding 2>", ...],
+  "recommendations": ["<recommendation 1>", "<recommendation 2>", ...],
+  "fingerprint": { ... full fingerprint dict from compute_dataset_fingerprint ... },
+  "eda_results": { ... raw tool outputs collected during analysis ... }
+}
+```
+
+Populate `summary`, `findings`, and `recommendations` from the same data you use for the printed output below. This artifact enables `/gtd:train` to skip profiling when EDA has already been run.
 
 ---
 

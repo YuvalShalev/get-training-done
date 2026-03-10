@@ -49,20 +49,54 @@ Parse `DURATION` into `TIME_BUDGET_SECONDS` (e.g., "5m" → 300, "1.5h" → 5400
 
 Print: `## Phase 1: Data Understanding`
 
-Run `/gtd:eda {DATA_PATH} --target {target} --time {min(2m, TIME_BUDGET_SECONDS * 0.15)}s`
+### Check for existing EDA results
 
-The EDA agent will analyze the data and return a structured summary including:
-- Data shape, feature types, missing data, signal characteristics
-- Complexity assessment (SIMPLE/MODERATE/COMPLEX)
-- Recommendations for training (split strategy, model families, etc.)
-- Dataset fingerprint for cross-run learning
+Derive the artifact filename: `.gtd-eda-{data_filename_without_extension}.json` in the same directory as DATA_PATH.
+Example: for `~/data/titanic.csv` → `~/data/.gtd-eda-titanic.json`
 
-Extract from the EDA summary:
+Use the Read tool to check if this file exists.
+
+**If found**:
+- Read the file and parse the JSON
+- Extract: `task_type`, `target`, `summary` (complexity, signal, issues), `recommendations`, `fingerprint`
+- Use AskUserQuestion: "Found EDA results from {timestamp}. Use these? (yes/no)"
+- **If yes**: Print the summary section as-is, skip to target confirmation below
+- **If no**: Fall through to fresh analysis below
+
+**If not found** (or user declined existing):
+- Run EDA tools directly:
+  1. Call `profile_dataset` with DATA_PATH and target column
+  2. Based on profile results, call additional EDA tools as needed (same adaptive logic as `/gtd:eda`)
+  3. Call `compute_dataset_fingerprint` with accumulated findings as `eda_results`
+- Build the EDA artifact JSON:
+  ```json
+  {
+    "data_path": "<absolute path to data file>",
+    "target_column": "<target>",
+    "task_type": "<detected task type>",
+    "timestamp": "<current ISO 8601 timestamp>",
+    "summary": {
+      "rows": <n>, "cols": <n>,
+      "n_numeric": <n>, "n_categorical": <n>,
+      "missing_summary": "<e.g. Age 19.9%, Cabin 77.1%>",
+      "signal_summary": "<e.g. weak linear, moderate nonlinear (MI)>",
+      "issues": ["<issue1>", ...],
+      "complexity": "<SIMPLE|MODERATE|COMPLEX>",
+      "complexity_reason": "<reason>"
+    },
+    "findings": ["<finding1>", ...],
+    "recommendations": ["<recommendation1>", ...],
+    "fingerprint": { ... },
+    "eda_results": { ... }
+  }
+  ```
+- Write this JSON to `.gtd-eda-{data_filename_without_extension}.json` using the Write tool
+- Print structured summary
+
+Extract from the EDA output (whether loaded or freshly computed):
 - `task_type`, `target`, complexity, signal characteristics
 - Split strategy recommendation (temporal? stratified? etc.)
 - Dataset fingerprint (store for Phase 3a)
-
-Print the EDA summary as-is (it's already compact).
 
 Confirmation: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
 
