@@ -1,6 +1,6 @@
 ---
 description: Provide domain context for a dataset before EDA or training
-argument-hint: "path/to/data.csv [free-text context description]"
+argument-hint: "this is a vehicle health prediction problem"
 ---
 
 # GTD: Dataset Context
@@ -16,11 +16,9 @@ You are collecting domain context from the user to improve EDA analysis, researc
 
 The user's arguments are: `$ARGUMENTS`
 
-Parse from the argument string:
-- `DATA_PATH` (required) — path to the CSV file (first argument)
-- Remaining text after the path = free-text domain context (optional)
+The entire `$ARGUMENTS` string is the free-text domain context. There is no data path argument.
 
-If no free-text context is provided, use AskUserQuestion to ask:
+If `$ARGUMENTS` is empty (no arguments provided), use AskUserQuestion to ask:
 "Describe the domain and problem for this dataset. For example: 'vehicle health prediction using sensor readings' or 'medical diagnosis from patient records'."
 
 ---
@@ -64,12 +62,10 @@ Examples:
 
 Write the context artifact as JSON using the Write tool.
 
-**Artifact path**: `{DATA_DIR}/.gtd-context-{data_filename_without_extension}.json`
-Example: for `~/data/titanic.csv` → `~/data/.gtd-context-titanic.json`
+**Artifact path**: `.gtd-context.json` in the **current working directory** (project-level context).
 
 ```json
 {
-  "data_path": "<absolute path to the data file>",
   "timestamp": "<current ISO 8601 timestamp>",
   "domain": "<synthesized domain description from user input + follow-ups>",
   "user_input": "<original free-text context, verbatim>",

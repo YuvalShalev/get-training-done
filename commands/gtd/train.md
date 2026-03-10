@@ -51,11 +51,11 @@ Print: `## Phase 1: Data Understanding`
 
 ### Load User Context
 
-Check for a context artifact: `.gtd-context-{data_filename_without_extension}.json` in the same directory as DATA_PATH.
+Check for a context artifact named `.gtd-context.json`. Search in this order:
+1. The same directory as DATA_PATH
+2. The current working directory (CWD)
 
-Example: for `~/data/titanic.csv` → `~/data/.gtd-context-titanic.json`
-
-Use the Read tool to check if this file exists.
+Use the Read tool to check each location. Use the first one found.
 
 **If found**:
 - Parse the JSON and extract the `domain` and `keywords` fields
