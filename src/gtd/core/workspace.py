@@ -61,9 +61,25 @@ def get_workspace_metadata(workspace_path: str | Path) -> dict[str, Any]:
 def update_workspace_metadata(workspace_path: str | Path, updates: dict[str, Any]) -> dict[str, Any]:
     """Update workspace metadata with new values (immutable merge)."""
     ws = Path(workspace_path)
-    metadata = _read_json(ws / "metadata.json")
+    metadata_path = ws / "metadata.json"
+    if metadata_path.exists():
+        metadata = _read_json(metadata_path)
+    else:
+        ws.mkdir(parents=True, exist_ok=True)
+        metadata = {
+            "workspace_id": ws.name,
+            "workspace_path": str(ws),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "runs": [],
+            "best_run_id": None,
+            "best_score": None,
+            "primary_metric": None,
+            "task_type": None,
+            "target_column": None,
+            "data_path": None,
+        }
     merged = {**metadata, **updates}
-    _write_json(ws / "metadata.json", merged)
+    _write_json(metadata_path, merged)
     return merged
 
 
