@@ -129,6 +129,221 @@ async def preview_data(path: str, n_rows: int = 5) -> str:
 
 
 @mcp.tool()
+async def compute_mutual_information(
+    path: str,
+    target_column: str,
+    task_type: str = "auto",
+    top_n: int = 0,
+) -> str:
+    """Compute mutual information scores for all features vs the target.
+
+    Works on both numeric and categorical features. Useful for detecting
+    nonlinear relationships that Pearson/Spearman correlations miss.
+
+    Args:
+        path: Path to the CSV file.
+        target_column: Name of the target column.
+        task_type: 'classification', 'regression', or 'auto' to infer.
+        top_n: Return only top N features (0 = all).
+    """
+    try:
+        result = data_profiler.compute_mutual_information(path, target_column, task_type, top_n)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def compute_cramers_v(
+    path: str,
+    target_column: str = "",
+) -> str:
+    """Compute Cramér's V for categorical-categorical associations.
+
+    If target_column is given, computes associations between each categorical
+    feature and the target. Otherwise computes all categorical pairs.
+
+    Args:
+        path: Path to the CSV file.
+        target_column: Optional target column for directed associations.
+    """
+    try:
+        result = data_profiler.compute_cramers_v(path, target_column or None)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def compute_anova_scores(
+    path: str,
+    target_column: str,
+) -> str:
+    """Compute ANOVA F-test scores for numeric features vs a categorical target.
+
+    Returns F-statistic and p-value per numeric feature, sorted by F-stat.
+
+    Args:
+        path: Path to the CSV file.
+        target_column: Name of the categorical target column.
+    """
+    try:
+        result = data_profiler.compute_anova_scores(path, target_column)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def compute_vif(
+    path: str,
+    target_column: str,
+    top_n: int = 20,
+) -> str:
+    """Compute Variance Inflation Factor for feature redundancy detection.
+
+    High VIF (>10) indicates multicollinearity. Severe VIF (>50) means
+    near-perfect linear dependence between features.
+
+    Args:
+        path: Path to the CSV file.
+        target_column: Target column (excluded from VIF computation).
+        top_n: Max features to analyze (default 20).
+    """
+    try:
+        result = data_profiler.compute_vif(path, target_column, top_n)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def detect_timestamp_columns(path: str) -> str:
+    """Auto-detect columns containing temporal/timestamp data.
+
+    Tries pd.to_datetime on non-numeric columns. If >80% of values parse
+    successfully, marks the column as a timestamp.
+
+    Args:
+        path: Path to the CSV file.
+    """
+    try:
+        result = data_profiler.detect_timestamp_columns(path)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def analyze_missing_patterns(path: str) -> str:
+    """Classify missing data patterns as MCAR, MAR, or MNAR.
+
+    Computes missingness indicator correlations to determine whether missing
+    data is random (MCAR), depends on observed variables (MAR), or depends
+    on the missing values themselves (MNAR).
+
+    Args:
+        path: Path to the CSV file.
+    """
+    try:
+        result = data_profiler.analyze_missing_patterns(path)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def test_normality(
+    path: str,
+    columns: str = "",
+) -> str:
+    """Test normality of numeric features using Shapiro-Wilk or Anderson-Darling.
+
+    Uses Shapiro-Wilk for datasets < 5000 rows, Anderson-Darling otherwise.
+
+    Args:
+        path: Path to the CSV file.
+        columns: Comma-separated column names to test. Empty = all numeric.
+    """
+    try:
+        col_list = [c.strip() for c in columns.split(",") if c.strip()] if columns else None
+        result = data_profiler.test_normality(path, col_list)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def analyze_temporal_patterns(
+    path: str,
+    temporal_column: str,
+) -> str:
+    """Analyze trend, stationarity, and autocorrelation for a timestamp column.
+
+    Checks for temporal trends in numeric features and computes lag-1
+    autocorrelation. Recommends temporal split if significant patterns found.
+
+    Args:
+        path: Path to the CSV file.
+        temporal_column: Name of the temporal/date column.
+    """
+    try:
+        result = data_profiler.analyze_temporal_patterns(path, temporal_column)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def compute_separability_score(
+    path: str,
+    target_column: str,
+) -> str:
+    """Compute Fisher's discriminant ratio for classification difficulty assessment.
+
+    Measures class separability per feature using (μ1-μ2)² / (σ1²+σ2²).
+    Higher scores mean easier classification.
+
+    Args:
+        path: Path to the CSV file.
+        target_column: Name of the classification target column.
+    """
+    try:
+        result = data_profiler.compute_separability_score(path, target_column)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
+async def compute_dataset_fingerprint(
+    path: str,
+    target_column: str,
+    task_type: str = "auto",
+    eda_results: str = "",
+) -> str:
+    """Compute a rich dataset fingerprint combining profiling with EDA results.
+
+    Always computes core fingerprint fields from the data. If eda_results is
+    provided as a JSON string, enriches the fingerprint with signal analysis,
+    complexity scoring, and quality metrics.
+
+    Args:
+        path: Path to the CSV file.
+        target_column: Name of the target column.
+        task_type: 'classification', 'regression', or 'auto'.
+        eda_results: Optional JSON string with EDA tool outputs.
+    """
+    try:
+        import json as _json
+        eda_dict = _json.loads(eda_results) if eda_results else None
+        result = data_profiler.compute_dataset_fingerprint(path, target_column, task_type, eda_dict)
+        return _json_response(result)
+    except Exception as exc:
+        return _error_response(exc)
+
+
+@mcp.tool()
 async def create_data_split(
     workspace_path: str,
     data_path: str,

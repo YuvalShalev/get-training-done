@@ -48,37 +48,25 @@ Parse `DURATION` into `TIME_BUDGET_SECONDS` (e.g., "5m" → 300, "1.5h" → 5400
 ## Phase 1: Data Understanding
 
 Print: `## Phase 1: Data Understanding`
-Print: `Profiling dataset...`
 
-1. Call `profile_dataset` (gtd-data server) with the data path
-2. Call `detect_data_issues` to identify class imbalance, leakage, multicollinearity, high cardinality
-3. Call `compute_correlations` to understand feature-target and feature-feature relationships
+Run `/gtd:eda {DATA_PATH} --target {target} --time {min(2m, TIME_BUDGET_SECONDS * 0.15)}s`
 
-Print a compact 2-line summary:
+The EDA agent will analyze the data and return a structured summary including:
+- Data shape, feature types, missing data, signal characteristics
+- Complexity assessment (SIMPLE/MODERATE/COMPLEX)
+- Recommendations for training (split strategy, model families, etc.)
+- Dataset fingerprint for cross-run learning
 
-```
-Data: {rows} rows x {cols} cols | {task_type} | Target: {target}
-Features: {n_numeric} numeric, {n_categorical} categorical | Missing: {missing_summary} | Issues: {issues_summary}
-```
+Extract from the EDA summary:
+- `task_type`, `target`, complexity, signal characteristics
+- Split strategy recommendation (temporal? stratified? etc.)
+- Dataset fingerprint (store for Phase 3a)
 
-### Complexity Assessment
-
-Based on profiling and correlation results, classify the problem:
-
-**SIMPLE** — strong linear signal exists:
-- Any feature-target |r| > 0.5, few features (< 20), clean data (< 5% missing), no severe class imbalance
-
-**MODERATE** — nonlinear patterns likely needed:
-- Moderate correlations (0.2 < |r| < 0.5), mix of feature types, some missing data or imbalance
-
-**COMPLEX** — likely needs advanced approaches:
-- Weak correlations (|r| < 0.2), high cardinality categoricals, many features (> 50), severe imbalance, complex interactions likely
-
-Print: `Complexity: {SIMPLE|MODERATE|COMPLEX} — {one-line reason}`
+Print the EDA summary as-is (it's already compact).
 
 Confirmation: Use AskUserQuestion — "Target: `{target}`, task: {task_type}. Correct?" (yes/no only)
 
-**CONTEXT RULE**: From this point forward, reference ONLY the 2-line summary and complexity assessment above. Do NOT repeat or include raw profiling JSON from this phase in any subsequent message.
+**CONTEXT RULE**: From this point forward, reference ONLY the EDA summary above. Do NOT repeat or include raw profiling JSON from this phase in any subsequent message.
 
 ---
 
@@ -89,8 +77,8 @@ Print: `## Phase 1.5: Data Partitioning`
 Before any training, split the data into train and validation partitions.
 The validation set is held out for ALL evaluation — it is NEVER used for training.
 
-1. Decide the split strategy based on Phase 1 profiling results:
-   - If data has a date/timestamp column → `strategy="temporal"` (prevents temporal leakage)
+1. Decide the split strategy based on the EDA summary recommendations:
+   - If EDA recommends "temporal split recommended" → `strategy="temporal"` (prevents temporal leakage)
    - If classification with class imbalance → `strategy="stratified"` (preserves class distribution)
    - If data has a group/ID column (e.g., customer_id, patient_id) → `strategy="group"` (prevents group leakage)
    - Regression without special structure → `strategy="random"`

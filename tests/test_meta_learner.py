@@ -10,6 +10,7 @@ import pytest
 from gtd.core.meta_learner import (
     compute_composite_score,
     compute_dataset_fingerprint,
+    compute_dataset_fingerprint_from_eda,
     create_observation,
     extract_strategy_sequence,
     load_learnings,
@@ -570,3 +571,182 @@ class TestCompositeScore:
         # quality clamped to 1.0
         expected = 0.6 * 1.0 + 0.25 * 1.0 + 0.15 * 1.0
         assert abs(score - expected) < 0.001
+
+
+# ---------------------------------------------------------------------------
+# compute_dataset_fingerprint_from_eda
+# ---------------------------------------------------------------------------
+
+
+class TestComputeDatasetFingerprintFromEda:
+    def test_extracts_core_fields(self):
+        eda_result = {
+            "size_class": "medium",
+            "task": "binary_classification",
+            "feature_mix": "mixed",
+            "n_rows": 5000,
+            "n_cols": 20,
+            "issues": ["missing_values"],
+        }
+        fp = compute_dataset_fingerprint_from_eda(eda_result)
+        assert fp["size_class"] == "medium"
+        assert fp["task"] == "binary_classification"
+        assert fp["feature_mix"] == "mixed"
+        assert fp["n_rows"] == 5000
+        assert fp["issues"] == ["missing_values"]
+
+    def test_includes_enrichment_fields(self):
+        eda_result = {
+            "size_class": "small",
+            "task": "regression",
+            "feature_mix": "all_numeric",
+            "n_rows": 100,
+            "n_cols": 5,
+            "issues": [],
+            "signal_type": "linear",
+            "complexity_score": 2,
+            "missing_pattern": "MCAR",
+            "redundancy_level": "low",
+        }
+        fp = compute_dataset_fingerprint_from_eda(eda_result)
+        assert fp["signal_type"] == "linear"
+        assert fp["complexity_score"] == 2
+        assert fp["missing_pattern"] == "MCAR"
+        assert fp["redundancy_level"] == "low"
+
+    def test_missing_enrichment_defaults_to_none(self):
+        eda_result = {
+            "size_class": "small",
+            "task": "regression",
+            "feature_mix": "all_numeric",
+            "n_rows": 100,
+            "n_cols": 5,
+            "issues": [],
+        }
+        fp = compute_dataset_fingerprint_from_eda(eda_result)
+        assert fp["signal_type"] is None
+        assert fp["complexity_score"] is None
+
+    def test_compatible_with_match_strategies(self):
+        eda_result = {
+            "size_class": "medium",
+            "task": "binary_classification",
+            "feature_mix": "mixed",
+            "n_rows": 5000,
+            "n_cols": 20,
+            "issues": [],
+            "signal_type": "nonlinear",
+            "complexity_score": 3,
+        }
+        fp = compute_dataset_fingerprint_from_eda(eda_result)
+        learnings = {
+            "strategies": [{
+                "fingerprint": {
+                    "task": "binary_classification",
+                    "size_class": "medium",
+                    "feature_mix": "mixed",
+                },
+                "best": "xgboost 0.9",
+            }],
+        }
+        matches = match_strategies(fp, learnings)
+        assert len(matches) == 1
+        assert matches[0]["match_score"] >= 7
+
+
+# ---------------------------------------------------------------------------
+# Enhanced match_strategies scoring
+# ---------------------------------------------------------------------------
+
+
+class TestEnhancedMatchStrategies:
+    def test_classification_cross_match(self):
+        """binary_classification should partially match multiclass_classification."""
+        fingerprint = {"task": "binary_classification", "size_class": "medium", "feature_mix": "mixed"}
+        learnings = {
+            "strategies": [{
+                "fingerprint": {
+                    "task": "multiclass_classification",
+                    "size_class": "medium",
+                    "feature_mix": "mixed",
+                },
+                "best": "xgb 0.85",
+            }],
+        }
+        matches = match_strategies(fingerprint, learnings)
+        assert len(matches) == 1
+        # Should get partial task match (2) + size (2) + feature_mix (1) = 5
+        assert matches[0]["match_score"] == 5
+
+    def test_adjacent_size_class_bonus(self):
+        """Adjacent size classes (small↔medium) should get partial credit."""
+        fingerprint = {"task": "regression", "size_class": "small", "feature_mix": "all_numeric"}
+        learnings = {
+            "strategies": [{
+                "fingerprint": {
+                    "task": "regression",
+                    "size_class": "medium",
+                    "feature_mix": "all_numeric",
+                },
+                "best": "lr 0.8",
+            }],
+        }
+        matches = match_strategies(fingerprint, learnings)
+        assert len(matches) == 1
+        # task (4) + adjacent_size (1) + feature_mix (1) = 6
+        assert matches[0]["match_score"] == 6
+
+    def test_enrichment_field_scoring(self):
+        """Matching enrichment fields should increase score."""
+        fingerprint = {
+            "task": "binary_classification",
+            "size_class": "medium",
+            "feature_mix": "mixed",
+            "signal_type": "nonlinear",
+            "complexity_score": 3,
+            "missing_pattern": "MAR",
+            "redundancy_level": "moderate",
+        }
+        learnings = {
+            "strategies": [{
+                "fingerprint": {
+                    "task": "binary_classification",
+                    "size_class": "medium",
+                    "feature_mix": "mixed",
+                    "signal_type": "nonlinear",
+                    "complexity_score": 3,
+                    "missing_pattern": "MAR",
+                    "redundancy_level": "moderate",
+                },
+                "best": "lgbm 0.92",
+            }],
+        }
+        matches = match_strategies(fingerprint, learnings)
+        assert len(matches) == 1
+        # core: 4+2+1=7, enrichment: 1+1+0.5+0.5=3, total=10
+        assert matches[0]["match_score"] == 10
+
+    def test_old_fingerprint_still_works(self):
+        """Old fingerprints without enrichment fields should still match."""
+        fingerprint = {
+            "task": "regression",
+            "size_class": "large",
+            "feature_mix": "all_numeric",
+            "signal_type": "linear",
+            "complexity_score": 2,
+        }
+        learnings = {
+            "strategies": [{
+                "fingerprint": {
+                    "task": "regression",
+                    "size_class": "large",
+                    "feature_mix": "all_numeric",
+                    # No enrichment fields
+                },
+                "best": "lr 0.95",
+            }],
+        }
+        matches = match_strategies(fingerprint, learnings)
+        assert len(matches) == 1
+        # Only core fields match: 4+2+1 = 7
+        assert matches[0]["match_score"] == 7

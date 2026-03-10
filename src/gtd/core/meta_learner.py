@@ -267,16 +267,49 @@ def compute_dataset_fingerprint(profile_result: dict[str, Any]) -> dict[str, Any
     }
 
 
+def compute_dataset_fingerprint_from_eda(eda_result: dict[str, Any]) -> dict[str, Any]:
+    """Extract a fingerprint from a rich EDA ``compute_dataset_fingerprint`` output.
+
+    This is the bridge between the new EDA tool output and the existing
+    strategy matching system. It ensures backward compatibility — old
+    fingerprints (with only 6 fields) still work in ``match_strategies``.
+
+    Args:
+        eda_result: Dict returned by ``data_profiler.compute_dataset_fingerprint``.
+
+    Returns:
+        Fingerprint dict compatible with ``match_strategies``.
+    """
+    return {
+        "size_class": eda_result.get("size_class", "unknown"),
+        "task": eda_result.get("task", "unknown"),
+        "feature_mix": eda_result.get("feature_mix", "unknown"),
+        "n_rows": eda_result.get("n_rows", 0),
+        "n_cols": eda_result.get("n_cols", 0),
+        "issues": eda_result.get("issues", []),
+        # New enrichment fields (optional — matching degrades gracefully)
+        "signal_type": eda_result.get("signal_type"),
+        "complexity_score": eda_result.get("complexity_score"),
+        "missing_pattern": eda_result.get("missing_pattern"),
+        "redundancy_level": eda_result.get("redundancy_level"),
+    }
+
+
 def match_strategies(
     fingerprint: dict[str, Any],
     learnings: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Find past strategies matching the current dataset fingerprint.
 
-    Matching priority: task type > size class > feature mix.
+    Matching priority: task type (4) > size class (2) > feature mix (1),
+    plus optional enrichment fields: signal_type (+1), complexity_score (+1),
+    missing_pattern (+0.5), redundancy_level (+0.5). Max score = 10.
+
+    Old fingerprints without enrichment fields match on available fields only.
 
     Args:
-        fingerprint: Dict from :func:`compute_dataset_fingerprint`.
+        fingerprint: Dict from :func:`compute_dataset_fingerprint` or
+            :func:`compute_dataset_fingerprint_from_eda`.
         learnings: Parsed learnings dict from :func:`load_learnings`.
 
     Returns:
@@ -286,21 +319,70 @@ def match_strategies(
     if not strategies:
         return []
 
-    scored: list[tuple[int, dict[str, Any]]] = []
+    scored: list[tuple[float, dict[str, Any]]] = []
     for strat in strategies:
-        score = 0
+        score = 0.0
         fp = strat.get("fingerprint", {})
-        if fp.get("task") == fingerprint.get("task"):
-            score += 4
+
+        # Core fields (max 7)
+        cur_task = fingerprint.get("task", "")
+        past_task = fp.get("task", "")
+        if cur_task and past_task:
+            if cur_task == past_task:
+                score += 4
+            elif _is_classification(cur_task) and _is_classification(past_task):
+                score += 2
+
         if fp.get("size_class") == fingerprint.get("size_class"):
             score += 2
+        elif _adjacent_size(fp.get("size_class"), fingerprint.get("size_class")):
+            score += 1
+
         if fp.get("feature_mix") == fingerprint.get("feature_mix"):
             score += 1
+
+        # Enrichment fields (max 3, only when both fingerprints have them)
+        cur_signal = fingerprint.get("signal_type")
+        past_signal = fp.get("signal_type")
+        if cur_signal and past_signal and cur_signal == past_signal:
+            score += 1
+
+        cur_complexity = fingerprint.get("complexity_score")
+        past_complexity = fp.get("complexity_score")
+        if cur_complexity is not None and past_complexity is not None:
+            if abs(cur_complexity - past_complexity) <= 1:
+                score += 1
+
+        cur_missing = fingerprint.get("missing_pattern")
+        past_missing = fp.get("missing_pattern")
+        if cur_missing and past_missing and cur_missing == past_missing:
+            score += 0.5
+
+        cur_redundancy = fingerprint.get("redundancy_level")
+        past_redundancy = fp.get("redundancy_level")
+        if cur_redundancy and past_redundancy and cur_redundancy == past_redundancy:
+            score += 0.5
+
         if score > 0:
             scored.append((score, strat))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return [{**s, "match_score": score} for score, s in scored]
+
+
+def _is_classification(task: str) -> bool:
+    """Check if a task type is any form of classification."""
+    return "classification" in task
+
+
+def _adjacent_size(a: str | None, b: str | None) -> bool:
+    """Check if two size classes are adjacent (small↔medium, medium↔large)."""
+    if not a or not b:
+        return False
+    order = ["small", "medium", "large"]
+    if a not in order or b not in order:
+        return False
+    return abs(order.index(a) - order.index(b)) == 1
 
 
 def extract_strategy_sequence(optimization_history: dict[str, Any]) -> dict[str, Any]:
@@ -459,6 +541,12 @@ def load_learnings(memory_dir: str) -> dict[str, Any]:
         # Build strategy entry for matching
         fp = _parse_fingerprint_raw(entry.get("fingerprint_raw", ""))
         if fp:
+            hp_raw = entry.get("hp_sweet_spot", entry.get("hp_note", ""))
+            try:
+                hp_parsed = json.loads(hp_raw) if hp_raw else {}
+            except (json.JSONDecodeError, TypeError):
+                hp_parsed = {}
+
             strategies.append({
                 "fingerprint": fp,
                 "date": entry.get("date", ""),
@@ -466,7 +554,8 @@ def load_learnings(memory_dir: str) -> dict[str, Any]:
                 "best": entry.get("best", ""),
                 "insight": entry.get("insight", ""),
                 "anti_pattern": entry.get("anti_pattern", entry.get("avoid", "")),
-                "hp_sweet_spot": entry.get("hp_sweet_spot", entry.get("hp_note", "")),
+                "hp_sweet_spot": hp_raw,
+                "best_hyperparameters": hp_parsed,
                 "strategy_sequence_raw": entry.get("strategy_sequence_raw", ""),
             })
 
