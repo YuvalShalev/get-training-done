@@ -59,11 +59,10 @@ Use the Read tool to check if this file exists.
 **If found**:
 - Read the file and parse the JSON
 - Extract: `task_type`, `target`, `summary` (complexity, signal, issues), `recommendations`, `fingerprint`
-- Use AskUserQuestion: "Found EDA results from {timestamp}. Use these? (yes/no)"
-- **If yes**: Print the summary section as-is, skip to target confirmation below
-- **If no**: Fall through to fresh analysis below
+- Print: `Loading EDA results from prior analysis ({timestamp})...`
+- Print the summary section as-is, skip to target confirmation below
 
-**If not found** (or user declined existing):
+**If not found**:
 - Run EDA tools directly:
   1. Call `profile_dataset` with DATA_PATH and target column
   2. Based on profile results, call additional EDA tools as needed (same adaptive logic as `/gtd:eda`)
