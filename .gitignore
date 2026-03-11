@@ -27,5 +27,13 @@ catboost_info/
 # Claude Code local settings
 .claude/settings.local.json
 
-# Lock files
-uv.lock
+# Claude-mem auto-generated files
+**/CLAUDE.md
+
+# Generated docs
+docs/*.html
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml

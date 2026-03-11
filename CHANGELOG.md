@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-03-11
+
+### Added
+- Architecture diagrams (Mermaid) in README
+- All 7 slash commands documented
+- CI status badge
+- SECURITY.md for responsible disclosure
+
+### Changed
+- README restructured for GA release
+- Development Status upgraded to Beta
+
+### Fixed
+- Auto strategy for data splitting (regression uses random, not stratified)
+- Metric direction for lower-is-better metrics (RMSE, MAE)
+- class_weight added to classifier HP specs
+- Removed unused shap and seaborn dependencies
+
+### Removed
+- Exporter module (consolidated into trainer)
+- Unused ml-optimizer agent definition
+
 ## [0.2.0] - 2026-02-26
 
 ### Added

@@ -2,6 +2,7 @@
 
 > AI-powered ML model optimization for Claude Code
 
+[![CI](https://github.com/yuvalshalev/get-training-done/actions/workflows/ci.yml/badge.svg)](https://github.com/yuvalshalev/get-training-done/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet.svg)](https://claude.com/claude-code)
@@ -28,27 +29,61 @@ That's it. GTD profiles your data, researches approaches, trains baselines, opti
 | Command | Description |
 |---------|-------------|
 | `/gtd:train` | Train and optimize a model on your dataset |
+| `/gtd:eda` | Exploratory data analysis on your dataset |
+| `/gtd:context` | Set dataset context for subsequent commands |
 | `/gtd:inference` | Run predictions on new data |
 | `/gtd:evaluate` | Evaluate model on labeled test data |
 | `/gtd:models` | List all trained models |
+| `/gtd:evolve` | Evolve training prompts with DSPy |
 
 ## How It Works
 
 GTD follows a 5-phase workflow, the same way a senior data scientist approaches a new problem:
 
-```
-1. Data Understanding    Profile distributions, detect issues, compute correlations
-        |
-2. Research              Search arXiv, Kaggle, Papers with Code for similar problems
-        |
-3. Baselines             Train 2-3 diverse models with default parameters
-        |
-4. Optimization          Iteratively tune hyperparameters with evidence-based decisions
-        |
-5. Export & Report       Save best model, generate visualizations, summarize findings
+```mermaid
+graph TD
+    A["/gtd:train data.csv"] --> B["Phase 1: Data Understanding<br/>Profile, detect issues, correlations"]
+    B --> C["Phase 2: Research<br/>arXiv, Kaggle, Papers with Code"]
+    C --> D["Phase 3: Baselines<br/>2-3 diverse models, default params"]
+    D --> E["Phase 4: Optimization<br/>Iterative HP tuning with evidence"]
+    E --> F{"Converged?"}
+    F -->|No| E
+    F -->|Yes| G["Phase 5: Export & Report<br/>Best model + visualizations"]
+    G --> H["Save learnings for next session"]
+    H -.->|Next session| B
 ```
 
 Every decision is justified. The agent explains why it picked XGBoost over Random Forest, why it lowered the learning rate, and when to stop.
+
+## Architecture
+
+```mermaid
+graph LR
+    subgraph "Claude Code"
+        CMD["7 Slash Commands"]
+    end
+    subgraph "MCP Servers"
+        DS["gtd-data · 5 tools"]
+        TS["gtd-training · 12 tools"]
+        RS["gtd-research · 4 tools"]
+    end
+    subgraph "Core"
+        DP[data_profiler] & TR[trainer] & EV[evaluator] & ML[meta_learner]
+    end
+    CMD --> DS & TS & RS
+    DS --> DP
+    TS --> TR & EV & ML
+```
+
+## Self-Learning
+
+GTD saves what worked across sessions — strategies, hyperparameter sweet spots, and anti-patterns:
+
+- **Global knowledge** at `~/.claude/gtd/` persists insights across all projects
+- **Project-level** learnings stored in the workspace directory
+- **Prompt evolution** via `/gtd:evolve` uses DSPy to optimize the decision protocol after 10+ sessions
+
+See [docs/learning-lifecycle.md](docs/learning-lifecycle.md) for details.
 
 ## What Sets This Apart
 
@@ -125,12 +160,6 @@ Inside Claude Code, type `/plugins`, then add the repo URL.
 ```bash
 git clone https://github.com/yuvalshalev/get-training-done.git
 claude --plugin-dir ./get-training-done
-```
-
-### From PyPI (standalone, without plugin features)
-
-```bash
-pip install get-training-done
 ```
 
 ### From Source
