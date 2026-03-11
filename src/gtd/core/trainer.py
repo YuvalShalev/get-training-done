@@ -196,11 +196,11 @@ def train_model(
     if session_start is not None:
         result["session_elapsed"] = time.time() - session_start
 
-    # C. On first call: store dataset fingerprint and session start
+    # C. On first call: store dataset fingerprint and session start (fallback)
     if run_count == 1:
-        now = time.time()
-        _store_session_start(str(ws), now)
-        result["session_elapsed"] = time.time() - now
+        if _load_session_start(str(ws)) is None:
+            _store_session_start(str(ws), time.time())
+            result["session_elapsed"] = 0.0
         try:
             from gtd.core import meta_learner
 
@@ -212,9 +212,9 @@ def train_model(
             # D. Strategy matching — surface past data for the agent
             if memory_dir:
                 learnings = meta_learner.load_learnings(memory_dir)
-                matches = meta_learner.match_strategies(fingerprint, learnings)
-                if matches:
-                    result["strategy_recommendation"] = matches[:2]
+                past_strategies = meta_learner.find_past_strategies(learnings)
+                if past_strategies:
+                    result["past_strategies"] = past_strategies
 
             # E. Load prior knowledge from past sessions
             if memory_dir:
@@ -562,10 +562,20 @@ def export_model(
             # C. Extract strategy sequence
             strategy = meta_learner.extract_strategy_sequence(history)
 
-            # D. Get workspace metadata for data path
+            # D. Extract best run hyperparameters
+            best_run_id = history.get("best_run_id", "")
+            best_hp: dict[str, Any] = {}
+            best_model_type = strategy.get("final_model", "unknown")
+            for run in history.get("runs", []):
+                if run.get("run_id") == best_run_id:
+                    best_hp = run.get("hyperparameters", {})
+                    best_model_type = run.get("model_type", best_model_type)
+                    break
+
+            # E. Get workspace metadata for data path
             ws_metadata = workspace.get_workspace_metadata(ws)
 
-            # E. Save enhanced learnings → gtd-learnings.md
+            # F. Save enhanced learnings → gtd-learnings.md
             meta_learner.save_enhanced_learnings(memory_dir, {
                 "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                 "dataset_description": os.path.basename(
@@ -577,24 +587,24 @@ def export_model(
                     f"{strategy.get('final_score', '?')} "
                     f"over {strategy.get('total_runs', '?')} runs"
                 ),
-                "best_model": strategy.get("final_model", "unknown"),
+                "best_model": best_model_type,
                 "best_score": history.get("best_score", 0),
                 "metric_name": history.get("primary_metric", "unknown"),
-                "insight": f"Best via {strategy.get('final_model', '?')} "
+                "insight": f"Best via {best_model_type} "
                            f"in {strategy.get('runs_to_best', '?')} runs",
                 "anti_pattern": "",
-                "hp_sweet_spot": "",
+                "hp_sweet_spot": json.dumps(best_hp) if best_hp else "",
             })
 
-            # F. Update strategy library → gtd-strategy-library.md
+            # G. Update strategy library → gtd-strategy-library.md
             meta_learner.update_strategy_library(memory_dir, fingerprint, {
                 "proven_path": " → ".join(strategy.get("optimization_path", [])),
-                "hp_starting_points": "",
+                "hp_starting_points": json.dumps({"model": best_model_type, "hyperparameters": best_hp}) if best_hp else "",
                 "avoid": "",
                 "sessions_count": 1,
             })
 
-            # G. Record session metrics → gtd-meta-scores.jsonl
+            # H. Record session metrics → gtd-meta-scores.jsonl
             total_runs = strategy.get("total_runs", 0)
             runs_to_best = strategy.get("runs_to_best", total_runs)
             composite = meta_learner.compute_composite_score(

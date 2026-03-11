@@ -171,9 +171,13 @@ Print: `#1 {Model} → {score} | ⏱ {elapsed} / {budget}`
 
 ### Experience Check
 
-After the first `train_model` call, check if `strategy_recommendation` is present in the response. The first response may include `strategy_recommendation` (with `match_score` 1-7, `best`, `best_hyperparameters`) and `prior_knowledge` text. These are insights from past sessions on similar datasets. Stronger matches deserve more trust. Use them to inform your approach to research, baselines, and optimization. Print a one-line summary.
+After the first `train_model` call, check the response for:
+- `past_strategies`: raw summaries of past sessions (dataset description, best model, score, insight, anti-pattern, hyperparameters). These are NOT pre-filtered or scored.
+- `prior_knowledge`: synthesized high-level observations from past sessions.
 
-Store the experience check result for use in Phase 2, Phase 3b, and Phase 4.
+Cross-reference these against the EDA findings from Phase 1.5. Consider whether past datasets had similar signal characteristics, complexity, and data quality — not just similar shape. Discard past strategies that are superficially similar but differ in signal strength, feature structure, or domain. Print a one-line summary of what you'll carry forward.
+
+Store useful insights for Phase 2 (research decision), Phase 3b, and Phase 4.
 
 ---
 

@@ -684,28 +684,26 @@ def synthesize_session(
 
 @mcp.tool()
 def get_strategy_recommendation(
-    dataset_fingerprint: dict[str, Any],
     memory_dir: str,
 ) -> str:
-    """Match current dataset against proven strategies from past sessions.
+    """Retrieve raw past session strategies for agent-based reasoning.
 
-    Call this in Step 0 after profiling to find strategies that worked
-    on similar datasets.
+    Returns unfiltered, unscored past strategies sorted by date (newest
+    first). The agent decides relevance by cross-referencing against EDA
+    findings — no automatic scoring or matching is applied.
 
     Args:
-        dataset_fingerprint: Dict with size_class, task, feature_mix, issues.
         memory_dir: Path to the auto-memory directory containing gtd-learnings.md.
 
     Returns:
-        JSON string with matched strategies sorted by relevance.
+        JSON string with past_strategies list and count.
     """
     try:
         learnings = meta_learner.load_learnings(memory_dir)
-        matches = meta_learner.match_strategies(dataset_fingerprint, learnings)
+        past_strategies = meta_learner.find_past_strategies(learnings)
         return json.dumps({
-            "matches": matches,
-            "count": len(matches),
-            "has_recommendations": len(matches) > 0,
+            "past_strategies": past_strategies,
+            "count": len(past_strategies),
         })
     except Exception as exc:
         return json.dumps({"error": str(exc)})
