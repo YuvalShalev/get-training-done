@@ -45,7 +45,7 @@ Extract from the selected model entry:
 
 ## Step 2: Preview Test Data
 
-Call `profile_dataset` (gtd-data server) with the test data path to understand the data structure.
+Call `profile_dataset` (gtd-data server) with the test data path to understand the data structure. If `target_column` is not present in the test data, skip profiling or profile without target statistics (pass a non-target column or omit target_column).
 
 Check if the `target_column` exists in the test data. If it does, you will pass it to `predict` so metrics can be computed against the true labels.
 

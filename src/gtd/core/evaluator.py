@@ -268,7 +268,7 @@ def get_pr_curve(
             p, r, _ = precision_recall_curve(y_bin[:, i], y_prob[:, i])
             ap_scores.append(float(average_precision_score(y_bin[:, i], y_prob[:, i])))
         ap = float(np.mean(ap_scores))
-        # Use the first class curves for the plot (simplification for multiclass)
+        # Use class-0 curves for the plot (representative; AP is macro-averaged above)
         precision, recall, _ = precision_recall_curve(y_bin[:, 0], y_prob[:, 0])
 
     run_dir = workspace.get_run_dir(workspace_path, run_id)
@@ -280,6 +280,7 @@ def get_pr_curve(
         "recall": recall.tolist(),
         "ap": ap,
         "plot_path": plot_path,
+        "note": "class-0 curve shown; AP is macro-averaged over all classes" if y_prob.shape[1] > 2 else None,
     }
     workspace.save_run_artifact(workspace_path, run_id, "pr_curve.json", result)
     return result
@@ -327,8 +328,11 @@ def compare_runs(
     # Determine the primary scoring metric
     primary_metric = _infer_primary_metric(all_metric_keys)
 
-    # Find the best run
-    best_row = max(rows, key=lambda r: r.get(primary_metric, float("-inf")))
+    # Find the best run (lower is better for metrics like RMSE, MSE, MAE, log_loss)
+    if primary_metric in LOWER_IS_BETTER:
+        best_row = min(rows, key=lambda r: r.get(primary_metric, float("inf")))
+    else:
+        best_row = max(rows, key=lambda r: r.get(primary_metric, float("-inf")))
     best_run_id = best_row["run_id"]
 
     # Compute deltas relative to the best
@@ -378,20 +382,24 @@ def get_optimization_history(
         all_keys.update(r.get("metrics", {}).keys())
     primary_metric = _infer_primary_metric(all_keys)
 
-    # Track best-so-far
-    best_so_far = float("-inf")
+    # Track best-so-far (lower is better for metrics like RMSE, MSE, MAE, log_loss)
+    lower_is_better = primary_metric in LOWER_IS_BETTER
+    best_so_far = float("inf") if lower_is_better else float("-inf")
     best_run_id: str | None = None
     annotated: list[dict[str, Any]] = []
 
     for run in sorted_runs:
         score = run.get("metrics", {}).get(primary_metric)
-        if score is not None and score > best_so_far:
-            best_so_far = score
-            best_run_id = run["run_id"]
+        if score is not None:
+            improved = score < best_so_far if lower_is_better else score > best_so_far
+            if improved:
+                best_so_far = score
+                best_run_id = run["run_id"]
 
+        sentinel = float("inf") if lower_is_better else float("-inf")
         annotated.append({
             **run,
-            "best_so_far": best_so_far if best_so_far > float("-inf") else None,
+            "best_so_far": best_so_far if best_so_far != sentinel else None,
             "is_best": run["run_id"] == best_run_id,
         })
 
@@ -593,7 +601,10 @@ def _permutation_importance(
     from sklearn.inspection import permutation_importance
 
     is_classification = task_type in ("binary_classification", "multiclass_classification")
-    scoring = "accuracy" if is_classification else "r2"
+    if is_classification:
+        scoring = "f1_weighted" if task_type == "multiclass_classification" else "accuracy"
+    else:
+        scoring = "r2"
 
     result = permutation_importance(
         model, X, y, n_repeats=10, random_state=42, scoring=scoring,
@@ -610,6 +621,9 @@ def _numeric_subset(metrics: dict[str, Any]) -> dict[str, float]:
         k: v for k, v in metrics.items()
         if isinstance(v, (int, float)) and not isinstance(v, bool)
     }
+
+
+LOWER_IS_BETTER: set[str] = {"rmse", "mse", "mae", "log_loss"}
 
 
 def _infer_primary_metric(metric_keys: set[str]) -> str:

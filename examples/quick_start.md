@@ -11,13 +11,6 @@ Install gtd and its dependencies:
 pip install -e .
 ```
 
-If you plan to use the research tools (arXiv, Kaggle, Papers with Code), install
-the optional research dependencies:
-
-```bash
-pip install -e ".[research]"
-```
-
 ### Verify the installation
 
 ```python

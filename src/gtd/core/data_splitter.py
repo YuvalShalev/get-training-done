@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ def create_data_split(
     data_path: str,
     target_column: str,
     task_type: str,
-    strategy: str = "stratified",
+    strategy: str = "auto",
     validation_fraction: float = 0.2,
     temporal_column: str | None = None,
     group_column: str | None = None,
@@ -31,7 +32,9 @@ def create_data_split(
         target_column: Name of the target column.
         task_type: One of 'binary_classification', 'multiclass_classification',
                    or 'regression'.
-        strategy: Split strategy — 'random', 'stratified', 'temporal', or 'group'.
+        strategy: Split strategy — 'auto', 'random', 'stratified', 'temporal', or
+                  'group'. When 'auto' (default), uses 'stratified' for
+                  classification tasks and 'random' for regression.
         validation_fraction: Fraction of data for validation (default 0.2).
         temporal_column: Column name for temporal sorting (required for 'temporal').
         group_column: Column name for group splitting (required for 'group').
@@ -56,9 +59,18 @@ def create_data_split(
     if target_column not in df.columns:
         raise ValueError(f"Target column '{target_column}' not found in data")
 
+    # Resolve "auto" strategy based on task type
+    if strategy == "auto":
+        strategy = "random" if task_type == "regression" else "stratified"
+
     ws = Path(workspace_path)
     data_dir = ws / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Store session start time (first call anchors the wall clock)
+    session_start_path = ws / "session_start.txt"
+    if not session_start_path.exists():
+        session_start_path.write_text(str(time.time()))
 
     train_df, val_df, split_info = _split_by_strategy(
         df=df,

@@ -222,7 +222,7 @@ def train_model(
                 if prior_knowledge:
                     result["prior_knowledge"] = prior_knowledge
         except Exception as exc:
-            logger.warning("Side effect (fingerprint/strategy) failed: %s", exc)
+            logger.warning("Side effect (fingerprint/strategy) failed: %s", exc, exc_info=True)
 
     # E. Include score trajectory in response
     trajectory = _load_run_log(str(ws))
@@ -382,8 +382,12 @@ def _maybe_update_best_run(
     metadata = workspace.get_workspace_metadata(workspace_path)
     current_best = metadata.get("best_score")
 
-    # Higher is better for accuracy and r2
-    is_better = current_best is None or score > current_best
+    # Determine comparison direction based on metric
+    from gtd.core.evaluator import LOWER_IS_BETTER
+    if metric_name in LOWER_IS_BETTER:
+        is_better = current_best is None or score < current_best
+    else:
+        is_better = current_best is None or score > current_best
 
     if is_better:
         workspace.update_best_run(workspace_path, run_id, score, metric_name)

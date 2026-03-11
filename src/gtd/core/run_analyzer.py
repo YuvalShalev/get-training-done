@@ -248,8 +248,9 @@ def test_significance(
 ) -> dict[str, Any]:
     """Test whether two sets of CV scores differ significantly.
 
-    Uses the Wilcoxon signed-rank test which is robust for small n (e.g.,
-    5-fold CV). Falls back to a paired t-test if Wilcoxon cannot be computed.
+    Uses a paired t-test, which is more powerful than Wilcoxon for small n
+    (5-fold CV). Wilcoxon's minimum p-value with n=5 is 0.0625, which can
+    never reach alpha=0.05.
 
     Args:
         cv_scores_a: CV scores from run A.

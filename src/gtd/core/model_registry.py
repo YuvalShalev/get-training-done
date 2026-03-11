@@ -141,6 +141,7 @@ RANDOM_FOREST_SPEC = ModelSpec(
         HyperparameterSpec("min_samples_leaf", "int", 1, 1, 20),
         HyperparameterSpec("max_features", "categorical", "sqrt", choices=["sqrt", "log2", 0.5, 0.8, None]),
         HyperparameterSpec("bootstrap", "bool", True),
+        HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
     tags=("ensemble", "tree_based", "robust"),
 )
@@ -157,6 +158,7 @@ EXTRA_TREES_SPEC = ModelSpec(
         HyperparameterSpec("min_samples_split", "int", 2, 2, 20),
         HyperparameterSpec("min_samples_leaf", "int", 1, 1, 20),
         HyperparameterSpec("max_features", "categorical", "sqrt", choices=["sqrt", "log2", 0.5, 0.8, None]),
+        HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
     tags=("ensemble", "tree_based", "fast_training"),
 )
@@ -172,6 +174,7 @@ LOGISTIC_REGRESSION_SPEC = ModelSpec(
         HyperparameterSpec("penalty", "categorical", "l2", choices=["l1", "l2", "elasticnet", None]),
         HyperparameterSpec("solver", "categorical", "lbfgs", choices=["lbfgs", "liblinear", "saga"]),
         HyperparameterSpec("max_iter", "int", 1000, 100, 5000),
+        HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
     supports_feature_importance=False,
     tags=("linear", "interpretable", "fast_training"),
@@ -187,6 +190,7 @@ SVC_SPEC = ModelSpec(
         HyperparameterSpec("C", "float", 1.0, 0.01, 100.0, log_scale=True),
         HyperparameterSpec("kernel", "categorical", "rbf", choices=["rbf", "linear", "poly", "sigmoid"]),
         HyperparameterSpec("gamma", "categorical", "scale", choices=["scale", "auto"]),
+        HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
     supports_feature_importance=False,
     tags=("kernel", "small_data"),

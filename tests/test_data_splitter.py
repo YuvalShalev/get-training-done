@@ -390,4 +390,70 @@ class TestEdgeCases:
         metadata = workspace.get_workspace_metadata(ws_path)
         assert "train_data_path" in metadata
         assert "validation_data_path" in metadata
+        # Default "auto" resolves to "stratified" for classification
         assert metadata["split_strategy"] == "stratified"
+
+
+# ---------------------------------------------------------------------------
+# TestAutoStrategy
+# ---------------------------------------------------------------------------
+
+
+class TestAutoStrategy:
+    """Tests for strategy='auto' (default)."""
+
+    def test_auto_resolves_to_stratified_for_classification(
+        self, tmp_path: Path, iris_csv: Path,
+    ) -> None:
+        ws = workspace.create_workspace(tmp_path)
+        ws_path = ws["workspace_path"]
+
+        result = create_data_split(
+            workspace_path=ws_path,
+            data_path=str(iris_csv),
+            target_column=IRIS_TARGET,
+            task_type="multiclass_classification",
+            # strategy defaults to "auto"
+        )
+
+        assert result["strategy"] == "stratified"
+
+        # Verify class distribution is preserved (stratified behaviour)
+        train_df = pd.read_csv(result["train_data_path"])
+        val_df = pd.read_csv(result["validation_data_path"])
+        train_dist = train_df[IRIS_TARGET].value_counts(normalize=True).sort_index()
+        val_dist = val_df[IRIS_TARGET].value_counts(normalize=True).sort_index()
+        for cls in train_dist.index:
+            assert abs(train_dist[cls] - val_dist[cls]) < 0.05
+
+    def test_auto_resolves_to_random_for_regression(
+        self, tmp_path: Path, boston_csv: Path,
+    ) -> None:
+        ws = workspace.create_workspace(tmp_path)
+        ws_path = ws["workspace_path"]
+
+        result = create_data_split(
+            workspace_path=ws_path,
+            data_path=str(boston_csv),
+            target_column=BOSTON_TARGET,
+            task_type="regression",
+            # strategy defaults to "auto"
+        )
+
+        assert result["strategy"] == "random"
+
+    def test_auto_resolves_to_stratified_for_binary(
+        self, tmp_path: Path, titanic_csv: Path,
+    ) -> None:
+        ws = workspace.create_workspace(tmp_path)
+        ws_path = ws["workspace_path"]
+
+        result = create_data_split(
+            workspace_path=ws_path,
+            data_path=str(titanic_csv),
+            target_column=TITANIC_TARGET,
+            task_type="binary_classification",
+            # strategy defaults to "auto"
+        )
+
+        assert result["strategy"] == "stratified"
