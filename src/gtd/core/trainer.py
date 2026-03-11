@@ -19,6 +19,14 @@ from gtd.core import model_registry, workspace
 
 logger = logging.getLogger(__name__)
 
+_RUN_ID_RE = __import__("re").compile(r"^[a-zA-Z0-9_\-]+$")
+
+
+def _validate_run_id(run_id: str) -> None:
+    """Raise ValueError if run_id contains path traversal characters."""
+    if not _RUN_ID_RE.match(run_id):
+        raise ValueError(f"Invalid run_id: {run_id!r}")
+
 
 def train_model(
     workspace_path: str,
@@ -256,6 +264,7 @@ def predict(
         FileNotFoundError: If model or test data not found.
         ValueError: If feature columns are missing from test data.
     """
+    _validate_run_id(run_id)
     ws = Path(workspace_path)
     run_dir = ws / "runs" / run_id
 
@@ -514,6 +523,7 @@ def export_model(
     """
     import shutil
 
+    _validate_run_id(run_id)
     ws = Path(workspace_path)
     run_dir = ws / "runs" / run_id
     model_src = run_dir / "model.joblib"

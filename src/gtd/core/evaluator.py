@@ -18,6 +18,15 @@ from gtd.core import workspace
 
 logger = logging.getLogger(__name__)
 
+_RUN_ID_RE = __import__("re").compile(r"^[a-zA-Z0-9_\-]+$")
+
+
+def _validate_run_id(run_id: str) -> None:
+    """Raise ValueError if run_id contains path traversal characters."""
+    if not _RUN_ID_RE.match(run_id):
+        raise ValueError(f"Invalid run_id: {run_id!r}")
+
+
 # Use a clean plotting style
 _PLOT_STYLE = "seaborn-v0_8-whitegrid"
 
@@ -43,6 +52,7 @@ def evaluate_model(
     Returns:
         Full metrics dict (accuracy, f1, r2, rmse, etc. depending on task_type).
     """
+    _validate_run_id(run_id)
     data_path, target_column, task_type = _resolve_defaults(
         workspace_path, run_id, data_path, target_column, task_type,
     )
@@ -406,7 +416,7 @@ def get_optimization_history(
     return {
         "runs": annotated,
         "best_run_id": best_run_id,
-        "best_score": best_so_far if best_so_far > float("-inf") else None,
+        "best_score": best_so_far if best_so_far != sentinel else None,
         "primary_metric": primary_metric,
     }
 
@@ -577,10 +587,16 @@ def _builtin_importance(
     if hasattr(model, "feature_importances_"):
         raw = model.feature_importances_
     elif hasattr(model, "coef_"):
-        raw = np.abs(model.coef_).flatten()
+        coef = np.abs(model.coef_)
+        if coef.ndim == 2:
+            raw = coef.mean(axis=0)
+        else:
+            raw = coef.flatten()
         if len(raw) != len(feature_columns):
-            # Multiclass: average across classes
-            raw = np.abs(model.coef_).mean(axis=0)
+            raise ValueError(
+                f"Feature count mismatch: model has {len(raw)} coefficients "
+                f"but {len(feature_columns)} feature columns provided"
+            )
     else:
         raise ValueError(
             "Model does not expose feature_importances_ or coef_. "

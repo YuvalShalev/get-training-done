@@ -168,9 +168,12 @@ def collect_training_examples(memory_dir: str) -> list:
 
     examples = []
     for session in metrics:
+        best_model = session.get("best_model", "")
+        if not best_model:
+            continue
         matching = [
             e for e in learnings.get("entries", [])
-            if e.get("best", "").startswith(session.get("best_model", "\x00"))
+            if e.get("best", "").startswith(best_model)
         ]
         if not matching:
             continue
@@ -220,7 +223,10 @@ def optimize_prompts(
             "message": f"Need 10+ sessions, have {len(examples)}. Keep training.",
         }
 
-    # Split 20/80 (DSPy recommendation for prompt optimizers)
+    # Shuffle then split 20/80 (DSPy recommendation for prompt optimizers)
+    import random
+    rng = random.Random(42)
+    rng.shuffle(examples)
     split = max(2, len(examples) // 5)
     trainset = examples[:split]
     valset = examples[split:]
