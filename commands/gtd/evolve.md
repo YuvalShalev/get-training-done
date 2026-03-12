@@ -9,7 +9,31 @@ You are running prompt evolution for the GTD optimizer. This uses DSPy to improv
 ## Requirements
 
 - At least 10 completed training sessions (recorded in `gtd-meta-scores.jsonl`)
-- DSPy installed: `pip install get-training-done[evolve]`
+- DSPy will be installed automatically into the plugin environment on first run
+
+## Environment Setup
+
+Before running any Python code, ensure the plugin environment is ready:
+
+```bash
+if [ -z "$CLAUDE_PLUGIN_ROOT" ]; then
+  echo "ERROR: CLAUDE_PLUGIN_ROOT is not set" >&2
+  exit 1
+fi
+
+PLUGIN_PYTHON="$CLAUDE_PLUGIN_ROOT/.venv/bin/python"
+
+# Bootstrap venv if missing
+if [ ! -f "$PLUGIN_PYTHON" ]; then
+  echo "GTD: Setting up Python environment..." >&2
+  python3 -m venv "$CLAUDE_PLUGIN_ROOT/.venv"
+  "$CLAUDE_PLUGIN_ROOT/.venv/bin/pip" install --quiet -e "$CLAUDE_PLUGIN_ROOT"
+fi
+
+# Ensure DSPy is installed
+"$PLUGIN_PYTHON" -c "import dspy" 2>/dev/null || \
+  "$CLAUDE_PLUGIN_ROOT/.venv/bin/pip" install --quiet -e "$CLAUDE_PLUGIN_ROOT[evolve]"
+```
 
 ## Steps
 
@@ -20,27 +44,39 @@ You are running prompt evolution for the GTD optimizer. This uses DSPy to improv
 
 ### Run Evolution
 
-```python
+```bash
+CLAUDE_PLUGIN_ROOT="$CLAUDE_PLUGIN_ROOT" \
+TRAIN_MD_PATH="$CLAUDE_PLUGIN_ROOT/commands/gtd/train.md" \
+"$CLAUDE_PLUGIN_ROOT/.venv/bin/python" <<'PYEOF'
+import json, os, sys
 from gtd.core.prompt_evolver import optimize_prompts, extract_decision_instructions, inject_into_train_md
 
+memory_dir = "<your auto-memory directory>"
+
 # Step A: Optimize
-result = optimize_prompts(memory_dir="<your auto-memory directory>")
-
+result = optimize_prompts(memory_dir=memory_dir)
 if result["status"] != "success":
-    print(f"Evolution failed: {result}")
-    # Stop here
-```
+    print(json.dumps(result, indent=2))
+    sys.exit(1)
 
-```python
 # Step B: Extract improved instructions
 instructions = extract_decision_instructions(result["optimized_program"])
 
 # Step C: Back up and inject into train.md
 inject_result = inject_into_train_md(
     instructions=instructions,
-    train_md_path="<path to commands/gtd/train.md>",
+    train_md_path=os.environ["TRAIN_MD_PATH"],
     backup=True,
 )
+
+print(json.dumps({
+    "status": "success",
+    "train_size": result["train_size"],
+    "val_size": result["val_size"],
+    "instructions": {k: str(v)[:200] for k, v in instructions.items()},
+    "inject_result": inject_result,
+}, indent=2))
+PYEOF
 ```
 
 5. Print results:
@@ -51,6 +87,6 @@ inject_result = inject_into_train_md(
 ## Rollback
 
 If the evolved instructions perform worse, restore from backup:
-```
-cp commands/gtd/train.v{N}.md commands/gtd/train.md
+```bash
+cp "$CLAUDE_PLUGIN_ROOT/commands/gtd/train.v{N}.md" "$CLAUDE_PLUGIN_ROOT/commands/gtd/train.md"
 ```
