@@ -95,7 +95,7 @@ def auto_preprocess(
 
     numeric_cols = df[feature_cols].select_dtypes(include=["number"]).columns.tolist()
     categorical_cols = df[feature_cols].select_dtypes(
-        include=["object", "category", "bool", "str"]
+        include=["object", "category", "bool"]
     ).columns.tolist()
 
     # Impute missing numeric with median

@@ -10,7 +10,6 @@ import pytest
 from gtd.core import workspace
 from gtd.core.data_splitter import create_data_split, get_split_paths
 
-
 # ---------------------------------------------------------------------------
 # Shared constants
 # ---------------------------------------------------------------------------

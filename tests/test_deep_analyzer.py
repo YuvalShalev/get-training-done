@@ -189,7 +189,6 @@ class TestAnalyzeRunDeep:
         # May or may not have threshold insights depending on data,
         # but should not error
         assert "insights" in result
-        categories = {i["category"] for i in result["insights"]}
         # At minimum should have some analysis
         assert isinstance(result["top_recommendation"], str)
 

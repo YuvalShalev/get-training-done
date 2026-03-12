@@ -8,7 +8,6 @@ import pytest
 
 from gtd.core import workspace
 
-
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 

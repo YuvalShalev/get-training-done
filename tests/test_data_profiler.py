@@ -14,7 +14,6 @@ from gtd.core.data_profiler import (
     profile_dataset,
 )
 
-
 # ---------------------------------------------------------------------------
 # profile_dataset
 # ---------------------------------------------------------------------------
@@ -215,13 +214,17 @@ class TestComputeCorrelations:
             )
 
     def test_include_matrix_false_omits_matrix(self, titanic_csv: Path) -> None:
-        result = compute_correlations(str(titanic_csv), target_column="Survived", include_matrix=False)
+        result = compute_correlations(
+            str(titanic_csv), target_column="Survived", include_matrix=False,
+        )
         assert result["correlation_matrix"] == {}
         assert len(result["top_correlated_pairs"]) > 0
         assert len(result["feature_target_correlations"]) > 0
 
     def test_include_matrix_true_returns_full_matrix(self, titanic_csv: Path) -> None:
-        result = compute_correlations(str(titanic_csv), target_column="Survived", include_matrix=True)
+        result = compute_correlations(
+            str(titanic_csv), target_column="Survived", include_matrix=True,
+        )
         assert len(result["correlation_matrix"]) > 0
         assert len(result["top_correlated_pairs"]) > 0
 

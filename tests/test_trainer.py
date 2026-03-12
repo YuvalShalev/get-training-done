@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -16,7 +15,6 @@ from gtd.core.trainer import (
     predict,
     train_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

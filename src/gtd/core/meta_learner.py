@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 # ─── Layer 1: Within-Run Reflection ──────────────────────────────────────────
 
 
@@ -381,7 +380,8 @@ def save_enhanced_learnings(memory_dir: str, session_summary: dict[str, Any]) ->
 
     traj = session_summary.get("score_trajectory", "")
     entry_lines = [
-        f"### {session_summary.get('date', 'unknown')} — {session_summary.get('dataset_description', 'dataset')}",
+        f"### {session_summary.get('date', 'unknown')} "
+        f"— {session_summary.get('dataset_description', 'dataset')}",
         f"- Fingerprint: {fp_str}",
         f"- Strategy sequence: {seq_str}",
         f"- Score trajectory: {traj}",
@@ -394,7 +394,11 @@ def save_enhanced_learnings(memory_dir: str, session_summary: dict[str, Any]) ->
     ]
     entry = "\n".join(entry_lines)
 
-    for learnings_path in [_GLOBAL_GTD_DIR / "gtd-learnings.md", Path(memory_dir) / "gtd-learnings.md"]:
+    learnings_targets = [
+        _GLOBAL_GTD_DIR / "gtd-learnings.md",
+        Path(memory_dir) / "gtd-learnings.md",
+    ]
+    for learnings_path in learnings_targets:
         learnings_path.parent.mkdir(parents=True, exist_ok=True)
         if not learnings_path.exists():
             header = "# GTD Learnings\n\n"
@@ -557,7 +561,11 @@ def update_strategy_library(
     ]
     entry = "\n".join(entry_lines)
 
-    for lib_path in [_GLOBAL_GTD_DIR / "gtd-strategy-library.md", Path(memory_dir) / "gtd-strategy-library.md"]:
+    lib_targets = [
+        _GLOBAL_GTD_DIR / "gtd-strategy-library.md",
+        Path(memory_dir) / "gtd-strategy-library.md",
+    ]
+    for lib_path in lib_targets:
         lib_path.parent.mkdir(parents=True, exist_ok=True)
         if not lib_path.exists():
             header = "# GTD Strategy Library\n\n"

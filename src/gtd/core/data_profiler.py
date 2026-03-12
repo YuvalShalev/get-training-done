@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import math
-import time
 import warnings
 from pathlib import Path
 from typing import Any
@@ -203,7 +202,10 @@ def compute_correlations(
     _validate_column_exists(df, target_column)
 
     if method not in ("pearson", "spearman", "kendall"):
-        raise ValueError(f"Unsupported correlation method '{method}'. Use 'pearson', 'spearman', or 'kendall'.")
+        raise ValueError(
+            f"Unsupported correlation method '{method}'. "
+            "Use 'pearson', 'spearman', or 'kendall'."
+        )
 
     numeric_df = df.select_dtypes(include="number")
 
@@ -1307,7 +1309,12 @@ def _detect_class_imbalance(df: pd.DataFrame, target_column: str) -> dict[str, A
     """Detect class imbalance in the target column."""
     if not pd.api.types.is_numeric_dtype(df[target_column]) or df[target_column].nunique() <= 20:
         return _compute_class_balance(df, target_column)
-    return {"distribution": {}, "minority_ratio": 1.0, "severity": "none", "note": "target is continuous"}
+    return {
+        "distribution": {},
+        "minority_ratio": 1.0,
+        "severity": "none",
+        "note": "target is continuous",
+    }
 
 
 def _detect_multicollinearity(

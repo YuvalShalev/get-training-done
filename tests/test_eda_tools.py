@@ -16,9 +16,10 @@ from gtd.core.data_profiler import (
     compute_separability_score,
     compute_vif,
     detect_timestamp_columns,
+)
+from gtd.core.data_profiler import (
     test_normality as profiler_test_normality,
 )
-
 
 # ---------------------------------------------------------------------------
 # compute_mutual_information

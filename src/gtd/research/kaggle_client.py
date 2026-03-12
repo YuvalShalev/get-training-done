@@ -49,10 +49,20 @@ def search_kaggle_datasets(query: str, max_results: int = 10) -> dict[str, Any]:
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code
         if status == 401:
-            return {"error": "Kaggle API authentication failed. Check your credentials.", "query": query}
-        return {"error": f"Kaggle API returned HTTP {status}", "query": query}
+            return {
+                "error": "Kaggle API authentication failed. "
+                "Check your credentials.",
+                "query": query,
+            }
+        return {
+            "error": f"Kaggle API returned HTTP {status}",
+            "query": query,
+        }
     except requests.exceptions.RequestException as exc:
-        return {"error": f"Kaggle API request failed: {exc}", "query": query}
+        return {
+            "error": f"Kaggle API request failed: {exc}",
+            "query": query,
+        }
 
     return _parse_datasets_response(response.json(), query)
 
@@ -111,10 +121,20 @@ def search_kaggle_notebooks(
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code
         if status == 401:
-            return {"error": "Kaggle API authentication failed. Check your credentials.", "query": query}
-        return {"error": f"Kaggle API returned HTTP {status}", "query": query}
+            return {
+                "error": "Kaggle API authentication failed. "
+                "Check your credentials.",
+                "query": query,
+            }
+        return {
+            "error": f"Kaggle API returned HTTP {status}",
+            "query": query,
+        }
     except requests.exceptions.RequestException as exc:
-        return {"error": f"Kaggle API request failed: {exc}", "query": query}
+        return {
+            "error": f"Kaggle API request failed: {exc}",
+            "query": query,
+        }
 
     return _parse_notebooks_response(response.json(), query)
 
@@ -234,7 +254,8 @@ def _credentials_error() -> dict[str, Any]:
             "1. Set environment variables KAGGLE_USERNAME and KAGGLE_KEY\n"
             "2. Create ~/.kaggle/kaggle.json with contents:\n"
             '   {"username": "your_username", "key": "your_api_key"}\n'
-            "   You can download this file from https://www.kaggle.com/settings -> API -> Create New Token"
+            "   You can download this file from "
+            "https://www.kaggle.com/settings -> API -> Create New Token"
         ),
     }
 

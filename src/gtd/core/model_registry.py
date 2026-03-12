@@ -44,7 +44,8 @@ class ModelSpec:
     name: str
     display_name: str
     description: str
-    task_types: tuple[str, ...]  # ("binary_classification", "multiclass_classification", "regression")
+    # e.g. ("binary_classification", "multiclass_classification", "regression")
+    task_types: tuple[str, ...]
     sklearn_class: str  # Full import path
     hyperparameters: tuple[HyperparameterSpec, ...]
     supports_feature_importance: bool = True
@@ -139,7 +140,10 @@ RANDOM_FOREST_SPEC = ModelSpec(
         HyperparameterSpec("max_depth", "int", 10, 2, 30),
         HyperparameterSpec("min_samples_split", "int", 2, 2, 20),
         HyperparameterSpec("min_samples_leaf", "int", 1, 1, 20),
-        HyperparameterSpec("max_features", "categorical", "sqrt", choices=["sqrt", "log2", 0.5, 0.8, None]),
+        HyperparameterSpec(
+            "max_features", "categorical", "sqrt",
+            choices=["sqrt", "log2", 0.5, 0.8, None],
+        ),
         HyperparameterSpec("bootstrap", "bool", True),
         HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
@@ -157,7 +161,10 @@ EXTRA_TREES_SPEC = ModelSpec(
         HyperparameterSpec("max_depth", "int", 10, 2, 30),
         HyperparameterSpec("min_samples_split", "int", 2, 2, 20),
         HyperparameterSpec("min_samples_leaf", "int", 1, 1, 20),
-        HyperparameterSpec("max_features", "categorical", "sqrt", choices=["sqrt", "log2", 0.5, 0.8, None]),
+        HyperparameterSpec(
+            "max_features", "categorical", "sqrt",
+            choices=["sqrt", "log2", 0.5, 0.8, None],
+        ),
         HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
     tags=("ensemble", "tree_based", "fast_training"),
@@ -171,8 +178,14 @@ LOGISTIC_REGRESSION_SPEC = ModelSpec(
     sklearn_class="sklearn.linear_model.LogisticRegression",
     hyperparameters=(
         HyperparameterSpec("C", "float", 1.0, 0.001, 100.0, log_scale=True),
-        HyperparameterSpec("penalty", "categorical", "l2", choices=["l1", "l2", "elasticnet", None]),
-        HyperparameterSpec("solver", "categorical", "lbfgs", choices=["lbfgs", "liblinear", "saga"]),
+        HyperparameterSpec(
+            "penalty", "categorical", "l2",
+            choices=["l1", "l2", "elasticnet", None],
+        ),
+        HyperparameterSpec(
+            "solver", "categorical", "lbfgs",
+            choices=["lbfgs", "liblinear", "saga"],
+        ),
         HyperparameterSpec("max_iter", "int", 1000, 100, 5000),
         HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
@@ -188,7 +201,10 @@ SVC_SPEC = ModelSpec(
     sklearn_class="sklearn.svm.SVC",
     hyperparameters=(
         HyperparameterSpec("C", "float", 1.0, 0.01, 100.0, log_scale=True),
-        HyperparameterSpec("kernel", "categorical", "rbf", choices=["rbf", "linear", "poly", "sigmoid"]),
+        HyperparameterSpec(
+            "kernel", "categorical", "rbf",
+            choices=["rbf", "linear", "poly", "sigmoid"],
+        ),
         HyperparameterSpec("gamma", "categorical", "scale", choices=["scale", "auto"]),
         HyperparameterSpec("class_weight", "categorical", None, choices=["balanced", None]),
     ),
@@ -205,7 +221,10 @@ KNN_CLASSIFIER_SPEC = ModelSpec(
     hyperparameters=(
         HyperparameterSpec("n_neighbors", "int", 5, 1, 50),
         HyperparameterSpec("weights", "categorical", "uniform", choices=["uniform", "distance"]),
-        HyperparameterSpec("metric", "categorical", "minkowski", choices=["minkowski", "euclidean", "manhattan"]),
+        HyperparameterSpec(
+            "metric", "categorical", "minkowski",
+            choices=["minkowski", "euclidean", "manhattan"],
+        ),
         HyperparameterSpec("p", "int", 2, 1, 3),
     ),
     supports_feature_importance=False,
@@ -289,7 +308,10 @@ KNN_REGRESSOR_SPEC = ModelSpec(
     hyperparameters=(
         HyperparameterSpec("n_neighbors", "int", 5, 1, 50),
         HyperparameterSpec("weights", "categorical", "uniform", choices=["uniform", "distance"]),
-        HyperparameterSpec("metric", "categorical", "minkowski", choices=["minkowski", "euclidean", "manhattan"]),
+        HyperparameterSpec(
+            "metric", "categorical", "minkowski",
+            choices=["minkowski", "euclidean", "manhattan"],
+        ),
     ),
     supports_feature_importance=False,
     supports_predict_proba=False,

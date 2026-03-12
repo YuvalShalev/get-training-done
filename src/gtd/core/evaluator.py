@@ -9,7 +9,6 @@ from typing import Any
 import joblib
 import matplotlib
 import numpy as np
-import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -271,8 +270,6 @@ def get_pr_curve(
         from sklearn.preprocessing import label_binarize
         classes = np.unique(y)
         y_bin = label_binarize(y, classes=classes)
-        precision_sum = np.zeros(0)
-        recall_sum = np.zeros(0)
         ap_scores: list[float] = []
         for i in range(len(classes)):
             p, r, _ = precision_recall_curve(y_bin[:, i], y_prob[:, i])
@@ -290,7 +287,11 @@ def get_pr_curve(
         "recall": recall.tolist(),
         "ap": ap,
         "plot_path": plot_path,
-        "note": "class-0 curve shown; AP is macro-averaged over all classes" if y_prob.shape[1] > 2 else None,
+        "note": (
+            "class-0 curve shown; AP is macro-averaged over all classes"
+            if y_prob.shape[1] > 2
+            else None
+        ),
     }
     workspace.save_run_artifact(workspace_path, run_id, "pr_curve.json", result)
     return result
@@ -431,7 +432,7 @@ def _resolve_defaults(
     target_column: str = "",
     task_type: str = "",
 ) -> tuple[str, str, str]:
-    """Fill in missing data_path / target_column / task_type from workspace metadata and run config."""
+    """Fill in missing data_path / target_column / task_type from workspace metadata."""
     if not data_path:
         from gtd.core.data_splitter import get_split_paths
 
@@ -513,7 +514,6 @@ def _classification_metrics(
     )
 
     is_binary = task_type == "binary_classification"
-    average = "binary" if is_binary else "macro"
 
     metrics: dict[str, Any] = {
         "accuracy": float(accuracy_score(y, y_pred)),
@@ -521,7 +521,9 @@ def _classification_metrics(
         "precision_macro": float(precision_score(y, y_pred, average="macro", zero_division=0)),
         "recall_macro": float(recall_score(y, y_pred, average="macro", zero_division=0)),
         "confusion_matrix": confusion_matrix(y, y_pred).tolist(),
-        "classification_report": classification_report(y, y_pred, output_dict=True, zero_division=0),
+        "classification_report": classification_report(
+            y, y_pred, output_dict=True, zero_division=0
+        ),
     }
 
     # Per-class F1 scores

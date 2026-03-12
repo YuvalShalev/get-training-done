@@ -84,7 +84,10 @@ def analyze_run_deep(
             _error_profiling_regression(model, X, y, y_pred, feature_columns, df)
         )
         all_insights.extend(
-            _slice_discovery(X, y, y_pred, feature_columns, task_type, float((abs_residuals > np.percentile(abs_residuals, 75)).mean()))
+            _slice_discovery(
+                X, y, y_pred, feature_columns, task_type,
+                float((abs_residuals > np.percentile(abs_residuals, 75)).mean()),
+            )
         )
         all_insights.extend(
             _prediction_range_analysis(model, X, y, y_pred)
@@ -268,7 +271,10 @@ def _threshold_optimization(
         "target_metric": best_f1,
         "sample_count": len(y),
         "estimated_impact": float(best_f1 - f1_at_half),
-        "recommendation": f"Set classification threshold to {best_t:.2f} for +{best_f1 - f1_at_half:.3f} F1 improvement",
+        "recommendation": (
+            f"Set classification threshold to {best_t:.2f} "
+            f"for +{best_f1 - f1_at_half:.3f} F1 improvement"
+        ),
         "confidence": "high",
     }]
 
@@ -399,7 +405,6 @@ def _slice_discovery(
         return []
 
     # Extract leaf nodes with error rate above overall
-    tree_obj = tree.tree_
     leaf_ids = tree.apply(X)
     unique_leaves = np.unique(leaf_ids)
 
@@ -429,7 +434,10 @@ def _slice_discovery(
             "target_metric": overall_error_rate,
             "sample_count": count,
             "estimated_impact": float(excess * count / len(is_error)),
-            "recommendation": f"Target subpopulation [{rule}] with specialized features or handling",
+            "recommendation": (
+                f"Target subpopulation [{rule}] "
+                "with specialized features or handling"
+            ),
             "confidence": "high" if count > 30 else "medium" if count > 15 else "low",
         })
 
@@ -446,9 +454,7 @@ def _extract_rule(
     feature = tree_obj.feature
     threshold = tree_obj.threshold
 
-    # Walk from root to leaf
-    node_indicator = tree.decision_path(np.zeros((1, len(feature_columns))))
-    # Instead, trace the path manually
+    # Trace the path manually from root to leaf
     path: list[str] = []
     node = 0  # root
     while node != leaf_id:
@@ -512,7 +518,8 @@ def _generate_summary(
     """Generate a 2-3 sentence summary and top recommendation."""
     if not ranked_insights:
         return (
-            "No significant model weaknesses detected. The model performs uniformly across segments.",
+            "No significant model weaknesses detected. "
+            "The model performs uniformly across segments.",
             "Continue with current approach or try a different model family.",
         )
 

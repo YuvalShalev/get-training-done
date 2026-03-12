@@ -192,7 +192,10 @@ class TestTrainAndEvaluateFlow:
         iris_workspace: dict[str, Any],
     ) -> None:
         ws_path = iris_workspace["workspace_path"]
-        feature_cols = ["crim", "zn", "indus", "nox", "rm", "age", "dis", "rad", "tax", "ptratio", "lstat"]
+        feature_cols = [
+            "crim", "zn", "indus", "nox", "rm", "age",
+            "dis", "rad", "tax", "ptratio", "lstat",
+        ]
 
         result = trainer.train_model(
             workspace_path=ws_path,

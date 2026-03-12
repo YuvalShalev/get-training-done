@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
-import pytest
 import requests
 
 from gtd.research import arxiv_client, kaggle_client, pwc_client

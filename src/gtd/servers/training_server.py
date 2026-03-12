@@ -8,7 +8,16 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from gtd.core import deep_analyzer, evaluator, feature_engine, meta_learner, model_registry, registry, run_analyzer, trainer, workspace
+from gtd.core import (
+    deep_analyzer,
+    evaluator,
+    feature_engine,
+    meta_learner,
+    model_registry,
+    registry,
+    run_analyzer,
+    trainer,
+)
 from gtd.core.trainer import _discover_memory_dir
 
 mcp = FastMCP("gtd-training")

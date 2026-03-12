@@ -10,6 +10,8 @@ from mcp.server.fastmcp import FastMCP
 from gtd.research.arxiv_client import search_arxiv as _search_arxiv
 from gtd.research.kaggle_client import (
     search_kaggle_datasets as _search_kaggle_datasets,
+)
+from gtd.research.kaggle_client import (
     search_kaggle_notebooks as _search_kaggle_notebooks,
 )
 from gtd.research.pwc_client import search_papers_with_code as _search_papers_with_code
@@ -50,7 +52,10 @@ def search_kaggle_datasets(query: str, max_results: int = 10) -> str:
         result = _search_kaggle_datasets(query=query, max_results=max_results)
         return _to_json(result)
     except Exception as exc:
-        return _to_json({"error": f"Unexpected error searching Kaggle datasets: {exc}", "query": query})
+        return _to_json({
+            "error": f"Unexpected error searching Kaggle datasets: {exc}",
+            "query": query,
+        })
 
 
 @mcp.tool()
@@ -67,10 +72,15 @@ def search_kaggle_notebooks(query: str, sort_by: str = "relevance", max_results:
         JSON string with search results or error information.
     """
     try:
-        result = _search_kaggle_notebooks(query=query, sort_by=sort_by, max_results=max_results)
+        result = _search_kaggle_notebooks(
+            query=query, sort_by=sort_by, max_results=max_results,
+        )
         return _to_json(result)
     except Exception as exc:
-        return _to_json({"error": f"Unexpected error searching Kaggle notebooks: {exc}", "query": query})
+        return _to_json({
+            "error": f"Unexpected error searching Kaggle notebooks: {exc}",
+            "query": query,
+        })
 
 
 @mcp.tool()
@@ -86,10 +96,15 @@ def search_papers_with_code(query: str, task_type: str | None = None, max_result
         JSON string with search results or error information.
     """
     try:
-        result = _search_papers_with_code(query=query, task_type=task_type, max_results=max_results)
+        result = _search_papers_with_code(
+            query=query, task_type=task_type, max_results=max_results,
+        )
         return _to_json(result)
     except Exception as exc:
-        return _to_json({"error": f"Unexpected error searching Papers with Code: {exc}", "query": query})
+        return _to_json({
+            "error": f"Unexpected error searching Papers with Code: {exc}",
+            "query": query,
+        })
 
 
 def _to_json(data: dict[str, Any]) -> str:

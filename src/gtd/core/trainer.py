@@ -613,7 +613,11 @@ def export_model(
             # G. Update strategy library → gtd-strategy-library.md
             meta_learner.update_strategy_library(memory_dir, fingerprint, {
                 "proven_path": " → ".join(strategy.get("optimization_path", [])),
-                "hp_starting_points": json.dumps({"model": best_model_type, "hyperparameters": best_hp}) if best_hp else "",
+                "hp_starting_points": (
+                    json.dumps({"model": best_model_type, "hyperparameters": best_hp})
+                    if best_hp
+                    else ""
+                ),
                 "avoid": "",
                 "sessions_count": 1,
             })

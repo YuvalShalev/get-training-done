@@ -58,7 +58,9 @@ def get_workspace_metadata(workspace_path: str | Path) -> dict[str, Any]:
     return _read_json(Path(workspace_path) / "metadata.json")
 
 
-def update_workspace_metadata(workspace_path: str | Path, updates: dict[str, Any]) -> dict[str, Any]:
+def update_workspace_metadata(
+    workspace_path: str | Path, updates: dict[str, Any],
+) -> dict[str, Any]:
     """Update workspace metadata with new values (immutable merge)."""
     ws = Path(workspace_path)
     metadata_path = ws / "metadata.json"

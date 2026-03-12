@@ -82,7 +82,8 @@ def _parse_arxiv_response(xml_text: str, query: str) -> dict[str, Any]:
         }
 
     total_element = root.find(f"{OPENSEARCH_NS}totalResults")
-    total_results = int(total_element.text) if total_element is not None and total_element.text else 0
+    has_total = total_element is not None and total_element.text
+    total_results = int(total_element.text) if has_total else 0
 
     results = [
         _parse_entry(entry)

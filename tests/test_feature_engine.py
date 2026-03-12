@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from gtd.core.feature_engine import auto_preprocess, engineer_features
-
 
 # ---------------------------------------------------------------------------
 # engineer_features -- individual operations
@@ -235,7 +233,7 @@ class TestAutoPreprocess:
         self, titanic_csv: Path, tmp_path: Path
     ) -> None:
         output = tmp_path / "auto_out.csv"
-        result = auto_preprocess(
+        auto_preprocess(
             data_path=str(titanic_csv),
             target_column="Survived",
             output_path=str(output),

@@ -13,19 +13,25 @@ class TestProfileDataset:
     """Tests for the profile_dataset tool logic."""
 
     def test_returns_shape(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "shape" in result
         assert result["shape"]["rows"] == 30
         assert result["shape"]["columns"] == 12
 
     def test_returns_dtypes(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "dtypes" in result
         assert "Survived" in result["dtypes"]
         assert "Age" in result["dtypes"]
 
     def test_returns_feature_types(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "feature_types" in result
         assert "numeric" in result["feature_types"]
         assert "categorical" in result["feature_types"]
@@ -33,21 +39,27 @@ class TestProfileDataset:
         assert "Sex" in result["feature_types"]["categorical"]
 
     def test_returns_distributions(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "distributions" in result
         assert "Age" in result["distributions"]
         assert result["distributions"]["Age"]["type"] == "numeric"
         assert "mean" in result["distributions"]["Age"]
 
     def test_returns_missing_pct(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "missing_pct" in result
         for col_pct in result["missing_pct"].values():
             assert isinstance(col_pct, float)
             assert 0.0 <= col_pct <= 100.0
 
     def test_returns_class_balance_for_classification(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert result["class_balance"] is not None
         assert "distribution" in result["class_balance"]
         assert "minority_ratio" in result["class_balance"]
@@ -58,19 +70,25 @@ class TestProfileDataset:
         assert result["class_balance"] is None
 
     def test_returns_outlier_counts(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "outlier_counts" in result
         for count in result["outlier_counts"].values():
             assert isinstance(count, int)
             assert count >= 0
 
     def test_returns_cardinality(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "cardinality" in result
         assert result["cardinality"]["Survived"] == 2
 
     def test_returns_preprocessing_recommendations(self, titanic_csv: Path) -> None:
-        result = data_profiler.profile_dataset(str(titanic_csv), "Survived", "binary_classification")
+        result = data_profiler.profile_dataset(
+            str(titanic_csv), "Survived", "binary_classification",
+        )
         assert "recommended_preprocessing" in result
         assert isinstance(result["recommended_preprocessing"], list)
 
@@ -111,7 +129,8 @@ class TestGetColumnStats:
         assert result["is_numeric"] is False
         assert "distribution" in result
         assert "value_counts" in result["distribution"]
-        assert "male" in result["distribution"]["value_counts"] or "female" in result["distribution"]["value_counts"]
+        value_counts = result["distribution"]["value_counts"]
+        assert "male" in value_counts or "female" in value_counts
 
     def test_unique_count(self, titanic_csv: Path) -> None:
         result = data_profiler.get_column_stats(str(titanic_csv), "Survived")
@@ -196,13 +215,17 @@ class TestComputeCorrelations:
         assert "feature_target_correlations" in result
 
     def test_include_matrix_false_omits_matrix(self, iris_csv: Path) -> None:
-        result = data_profiler.compute_correlations(str(iris_csv), "petal_length", "pearson", include_matrix=False)
+        result = data_profiler.compute_correlations(
+            str(iris_csv), "petal_length", "pearson", include_matrix=False,
+        )
         assert result["correlation_matrix"] == {}
         assert len(result["top_correlated_pairs"]) > 0
         assert len(result["feature_target_correlations"]) > 0
 
     def test_include_matrix_true_returns_full_output(self, iris_csv: Path) -> None:
-        result = data_profiler.compute_correlations(str(iris_csv), "petal_length", "pearson", include_matrix=True)
+        result = data_profiler.compute_correlations(
+            str(iris_csv), "petal_length", "pearson", include_matrix=True,
+        )
         assert len(result["correlation_matrix"]) > 0
         assert len(result["top_correlated_pairs"]) > 0
 

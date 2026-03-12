@@ -63,4 +63,4 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
-ignore = ["N806"]  # Allow uppercase variable names (X, y) — ML convention
+ignore = ["N803", "N806"]  # Allow uppercase param/variable names (X, y) — ML convention
