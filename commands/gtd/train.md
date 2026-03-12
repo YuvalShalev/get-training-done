@@ -232,6 +232,9 @@ Train 1-3 baseline models to establish benchmarks. Choose based on dataset chara
 
 - If research recommended specific models, include one in baselines
 - If dataset < 10k rows and < 100 features, try TabPFN as a baseline
+  - If TabPFN fails with an import/install error, ask the user: "TabPFN is recommended for this small dataset but isn't installed. Install it? (`pip install tabpfn`)"
+  - If user agrees, run `pip install tabpfn` in the project environment, then retry the TabPFN baseline
+  - If user declines, skip TabPFN and continue with other models
 
 Always pass `train_data_path` as `data_path`.
 
@@ -308,7 +311,7 @@ These are patterns experienced data scientists use. They are not prescriptions:
 - Error analysis revealing specific weak segments suggests targeted feature engineering
 - Prior experience that strongly matches this dataset deserves significant trust
 - Ensemble approaches are most valuable when diverse base models exist
-- Diminishing returns are real — small improvements after many runs suggest stopping
+- Diminishing returns in one approach suggest pivoting strategy, not stopping — try a different model family, feature engineering, or ensembles
 
 #### Research-Driven Decisions
 
@@ -328,8 +331,17 @@ Ensemble should be the LAST optimization step.
 
 #### Stopping
 
-Stop when further runs are unlikely to improve results meaningfully. Consider time
-remaining, score trajectory, diminishing returns, and whether a target metric is met.
+You MUST keep optimizing until the time budget is nearly exhausted. Only stop early if:
+- The target metric (if set) has been achieved
+- Remaining time < avg_run_time (not enough time for another run)
+
+If the current approach has plateaued but time remains:
+- Switch model family (e.g., tree-based → linear, or vice versa)
+- Try feature engineering (interactions, binning, target encoding)
+- Attempt ensembles/stacking with diverse base models
+- Revisit research hints you haven't tried yet
+
+A plateau in one model family is NOT a reason to stop — it's a reason to pivot.
 
 Print: `Stopping: {reason} | Total: {elapsed} | Runs: {n}`
 
