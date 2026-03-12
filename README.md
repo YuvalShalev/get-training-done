@@ -41,6 +41,7 @@ GTD follows a 5-phase workflow, the same way a senior data scientist approaches 
 
 ```mermaid
 graph TD
+    CTX["/gtd:context data.csv"] -.->|"Sets context"| A
     A["/gtd:train data.csv"] --> B["Phase 1: Data Understanding<br/>Profile, detect issues, correlations"]
     B --> C["Phase 2: Research<br/>arXiv, Kaggle, Papers with Code"]
     C --> D["Phase 3: Baselines<br/>2-3 diverse models, default params"]
