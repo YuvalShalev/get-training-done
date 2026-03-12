@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from gtd.core import (
     deep_analyzer,
+    ensemble,
     evaluator,
     feature_engine,
     meta_learner,
@@ -21,6 +22,29 @@ from gtd.core import (
 from gtd.core.trainer import _discover_memory_dir
 
 mcp = FastMCP("gtd-training")
+
+
+# ─── Response compression ──────────────────────────────────────────────────────
+
+
+def _compress_train_response(result: dict[str, Any]) -> dict[str, Any]:
+    """Compress train_model response to reduce token usage.
+
+    - Drops cv_scores array (mean_score + std_score are sufficient).
+    - Limits score_trajectory to last 5 entries.
+    - Drops past_strategies after the first run.
+    """
+    compressed = {k: v for k, v in result.items() if k != "cv_scores"}
+
+    trajectory = compressed.get("score_trajectory", [])
+    if len(trajectory) > 5:
+        compressed = {**compressed, "score_trajectory": trajectory[-5:]}
+
+    run_number = compressed.get("run_number", 1)
+    if run_number > 1:
+        compressed = {k: v for k, v in compressed.items() if k != "past_strategies"}
+
+    return compressed
 
 
 # ─── Training ─────────────────────────────────────────────────────────────────
@@ -74,6 +98,7 @@ def train_model(
             random_state=random_state,
             memory_dir=memory_dir,
         )
+        result = _compress_train_response(result)
         return json.dumps(result, default=str)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
@@ -104,6 +129,104 @@ def predict(
             test_data_path=test_data_path,
             target_column=target_column,
         )
+        return json.dumps(result, default=str)
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+# ─── Ensembling ──────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def train_ensemble(
+    workspace_path: str,
+    data_path: str,
+    strategy: str,
+    base_model_configs: list[dict[str, Any]],
+    feature_columns: list[str],
+    target_column: str,
+    task_type: str,
+    meta_learner_type: str = "logistic_regression",
+    meta_learner_params: dict[str, Any] | None = None,
+    run_ids: list[str] | None = None,
+    n_seeds: int = 5,
+    cv_folds: int = 5,
+    max_ensemble_size: int = 5,
+    random_state: int = 42,
+) -> str:
+    """Train an ensemble using stacking, hill climbing, or seed ensemble strategy.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        data_path: Path to the training CSV file.
+        strategy: One of 'stacking', 'hill_climbing', or 'seed_ensemble'.
+        base_model_configs: List of dicts with 'model_type' and 'hyperparameters'.
+        feature_columns: List of feature column names.
+        target_column: Name of the target column.
+        task_type: 'binary_classification', 'multiclass_classification', or 'regression'.
+        meta_learner_type: Model for the stacking meta-learner (default
+                          'logistic_regression').
+        meta_learner_params: Hyperparameters for the meta-learner.
+        run_ids: Run IDs for hill_climbing strategy.
+        n_seeds: Number of seeds for seed_ensemble strategy (default 5).
+        cv_folds: Number of cross-validation folds (default 5).
+        max_ensemble_size: Max models for hill_climbing (default 5).
+        random_state: Random seed (default 42).
+
+    Returns:
+        JSON string with ensemble results including run_id, scores, and timing.
+    """
+    try:
+        if strategy == "stacking":
+            result = ensemble.train_stacking_ensemble(
+                workspace_path=workspace_path,
+                data_path=data_path,
+                base_model_configs=base_model_configs,
+                meta_learner_type=meta_learner_type,
+                meta_learner_params=meta_learner_params or {},
+                feature_columns=feature_columns,
+                target_column=target_column,
+                task_type=task_type,
+                cv_folds=cv_folds,
+                random_state=random_state,
+            )
+        elif strategy == "hill_climbing":
+            if not run_ids:
+                return json.dumps({
+                    "error": "run_ids required for hill_climbing strategy",
+                })
+            result = ensemble.hill_climbing_ensemble(
+                workspace_path=workspace_path,
+                run_ids=run_ids,
+                data_path=data_path,
+                target_column=target_column,
+                task_type=task_type,
+                max_ensemble_size=max_ensemble_size,
+            )
+        elif strategy == "seed_ensemble":
+            if not base_model_configs:
+                return json.dumps({
+                    "error": "base_model_configs required for seed_ensemble",
+                })
+            first_config = base_model_configs[0]
+            result = ensemble.train_seed_ensemble(
+                workspace_path=workspace_path,
+                data_path=data_path,
+                model_type=first_config["model_type"],
+                hyperparameters=first_config.get("hyperparameters", {}),
+                feature_columns=feature_columns,
+                target_column=target_column,
+                task_type=task_type,
+                n_seeds=n_seeds,
+                cv_folds=cv_folds,
+            )
+        else:
+            return json.dumps({
+                "error": (
+                    f"Unknown strategy '{strategy}'. "
+                    "Choose from: stacking, hill_climbing, seed_ensemble"
+                ),
+            })
         return json.dumps(result, default=str)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
@@ -566,7 +689,11 @@ def engineer_features(
         operations: List of operation dicts with 'type' and params.
                     Supported types: one_hot_encode, label_encode, impute_numeric,
                     impute_categorical, standard_scale, log_transform,
-                    drop_columns, create_interaction.
+                    drop_columns, create_interaction, target_encode,
+                    frequency_encode, groupby_aggregate, polynomial_features,
+                    bin_numeric, feature_select, rank_transform,
+                    power_transform, cyclic_encode, ratio_features,
+                    categorical_interaction.
         output_path: Path to save transformed CSV.
 
     Returns:

@@ -192,42 +192,33 @@ Decide whether external research would add value given what you know from EDA an
 Print: `## Phase 2: Research`
 Print: `Searching for approaches...`
 
-### Kaggle Credential Check
+### Unified Research Call
 
-Before calling Kaggle, check if credentials exist by calling `search_kaggle_notebooks` with a test query.
+Use the `research_and_extract` tool (gtd-research server) for a single consolidated call that searches and extracts structured insights. This replaces separate `search_arxiv` + `search_kaggle_notebooks` calls and returns ~200 tokens instead of ~2000.
 
-**If Kaggle returns a credentials error** (the response contains `"error": "Kaggle credentials not found"` and a `"diagnosis"` field):
+When constructing the query, incorporate user context if loaded in Phase 1. Example: without context → `"tabular classification 12 features"`, with context → `"vehicle health prediction sensor data classification"`.
 
-1. Print the `diagnosis` message so the user can see exactly what's wrong.
-2. Use AskUserQuestion to ask:
-   "Kaggle credentials not found. Would you like me to create ~/.kaggle/kaggle.json for you?
-
-   You'll need your Kaggle username and API key from https://www.kaggle.com/settings → API → Create New Token.
-
-   Alternatively, you can set env vars: `export KAGGLE_USERNAME=... KAGGLE_KEY=...`
-
-   Options: (a) Create the file for me (b) Skip Kaggle research (c) I'll set it up myself"
-
-3. **If (a)**: Use AskUserQuestion to ask for their Kaggle username, then their API key. Create `~/.kaggle/kaggle.json` with the Write tool containing `{"username": "...", "key": "..."}`. Retry the Kaggle search.
-4. **If (b)**: Continue with arXiv only.
-5. **If (c)**: Continue with arXiv only — Kaggle will work next session.
-
-### Research Queries
-
-When constructing research queries, incorporate user context if it was loaded in Phase 1. Instead of generic queries like "tabular classification 12 features", use the domain description and keywords. Example: without context → `"tabular classification 12 features"`, with context → `"vehicle health prediction sensor data classification"`.
-
-1. Call `search_arxiv` (gtd-research server) with a query describing the dataset — use domain keywords from context if available, otherwise describe dataset characteristics. No credentials needed.
-2. Call `search_kaggle_notebooks` with a query about similar datasets or problem types — use domain keywords from context if available. Requires Kaggle API credentials (skip if credentials unavailable per above).
-
-If either call returns a non-credential error (network timeout, HTTP error), print the error on one line and continue with whatever results you got. Do NOT retry or block on research failures.
-
-Print at most 3 compact bullets:
+Pass `dataset_profile_json` with `{"n_rows": ..., "n_cols": ..., "n_numeric": ..., "n_categorical": ...}` from the EDA profile for context-aware model recommendations.
 
 ```
-Research: (1) {model_families} dominate for {data_type} (2) {technique} for {issue} (3) {insight_from_kaggle}
+research_and_extract(
+    query="...",
+    task_type="binary_classification",
+    dataset_profile_json='{"n_rows": 1000, "n_cols": 12, ...}',
+    sources="arxiv,kaggle",
+)
 ```
 
-**CONTEXT RULE**: From this point forward, reference ONLY the research summary above. Do NOT repeat or include full arXiv/Kaggle results from this phase in any subsequent message.
+If Kaggle returns a credentials error in the response, retry with `sources="arxiv"` only.
+
+**Store the returned `recommended_models` and `feature_tips` for Phases 3b and 4.**
+
+Also save the research insights to the workspace for `train_model` to surface them:
+- Write the insights JSON to `{workspace_path}/research_insights.json` using the Write tool.
+
+Print at most 3 compact bullets from the `summary` field.
+
+**CONTEXT RULE**: From this point forward, reference ONLY the research summary above. Do NOT repeat or include full research results from this phase in any subsequent message.
 
 ---
 
@@ -237,7 +228,10 @@ Print: `## Phase 3b: Remaining Baselines`
 
 ### Baselines
 
-Train 1-3 baseline models to establish benchmarks. Choose based on dataset characteristics, prior experience, and EDA complexity. Available levels: simple (logistic/linear), tree-based (RF, XGBoost, LightGBM, CatBoost), advanced (MLP, stacking). Don't waste runs on models that prior knowledge flags as poor fits.
+Train 1-3 baseline models to establish benchmarks. Choose based on dataset characteristics, prior experience, EDA complexity, and research insights. Available levels: simple (logistic/linear), tree-based (RF, XGBoost, LightGBM, CatBoost), advanced (MLP, TabPFN). Don't waste runs on models that prior knowledge flags as poor fits.
+
+- If research recommended specific models, include one in baselines
+- If dataset < 10k rows and < 100 features, try TabPFN as a baseline
 
 Always pass `train_data_path` as `data_path`.
 
@@ -315,6 +309,22 @@ These are patterns experienced data scientists use. They are not prescriptions:
 - Prior experience that strongly matches this dataset deserves significant trust
 - Ensemble approaches are most valuable when diverse base models exist
 - Diminishing returns are real — small improvements after many runs suggest stopping
+
+#### Research-Driven Decisions
+
+When research insights are available (from `train_model` response `research_hints` or stored from Phase 2):
+- Prioritize model families that research recommends
+- Try HP ranges suggested by competition solutions
+- Apply feature engineering techniques from winning notebooks
+
+#### Ensemble Strategy (after run 8+ or score plateau)
+
+When you have 3+ trained models with diverse architectures:
+1. Try `train_ensemble` with strategy="stacking" using top 2-3 models
+2. If improvement < 0.2%, try strategy="hill_climbing" with all runs
+3. Consider strategy="seed_ensemble" on best single model (3-5 seeds)
+
+Ensemble should be the LAST optimization step.
 
 #### Stopping
 

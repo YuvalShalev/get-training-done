@@ -232,6 +232,24 @@ def train_model(
         except Exception as exc:
             logger.warning("Side effect (fingerprint/strategy) failed: %s", exc, exc_info=True)
 
+    # F. Surface research insights on first 3 runs
+    if run_count <= 3:
+        research_path = Path(workspace_path) / "research_insights.json"
+        if research_path.exists():
+            try:
+                with open(research_path, encoding="utf-8") as f:
+                    research_hints = json.load(f)
+                result["research_hints"] = {
+                    "recommended_models": research_hints.get(
+                        "recommended_models", [],
+                    )[:3],
+                    "feature_tips": research_hints.get(
+                        "feature_tips", [],
+                    )[:3],
+                }
+            except Exception:
+                pass
+
     # E. Include score trajectory in response
     trajectory = _load_run_log(str(ws))
     result["score_trajectory"] = [

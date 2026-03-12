@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-
-logger = logging.getLogger(__name__)
+from sklearn.feature_selection import (
+    VarianceThreshold,
+    mutual_info_classif,
+    mutual_info_regression,
+)
+from sklearn.preprocessing import (
+    KBinsDiscretizer,
+    LabelEncoder,
+    PolynomialFeatures,
+    PowerTransformer,
+    StandardScaler,
+)
 
 
 def engineer_features(
@@ -136,12 +144,13 @@ def auto_preprocess(
         df = pd.get_dummies(df, columns=low_cardinality, drop_first=False, dtype=int)
         applied.append("one_hot_encode")
 
-    # Label encode high cardinality
+    # Label encode high cardinality (target encoding in auto_preprocess risks leakage;
+    # use the explicit target_encode operation with proper CV splits instead)
     if high_cardinality:
         for col in high_cardinality:
             le = LabelEncoder()
             df[col] = le.fit_transform(df[col].astype(str))
-        applied.append("label_encode")
+        applied.append("label_encode_high_cardinality")
 
     dest = Path(output_path)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -292,4 +301,200 @@ def _op_create_interaction(df: pd.DataFrame, params: dict[str, Any]) -> pd.DataF
     _validate_columns(df, [col_a, col_b], "create_interaction")
 
     df[name] = df[col_a] * df[col_b]
+    return df
+
+
+@_register_op("target_encode")
+def _op_target_encode(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Smoothed target encoding (use within CV folds to prevent leakage)."""
+    columns = params.get("columns", [])
+    target_col = params.get("target_column", "")
+    smoothing = params.get("smoothing", 10)
+    _validate_columns(df, columns + [target_col], "target_encode")
+    global_mean = df[target_col].mean()
+    for col in columns:
+        agg = df.groupby(col)[target_col].agg(["mean", "count"])
+        smoother = 1 / (1 + np.exp(-(agg["count"] - 1) / smoothing))
+        smooth_mean = global_mean * (1 - smoother) + agg["mean"] * smoother
+        df[col] = df[col].map(smooth_mean)
+    return df
+
+
+@_register_op("frequency_encode")
+def _op_frequency_encode(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Replace categories with their frequency counts."""
+    columns = params.get("columns", [])
+    _validate_columns(df, columns, "frequency_encode")
+    for col in columns:
+        freq = df[col].value_counts()
+        df[col] = df[col].map(freq)
+    return df
+
+
+@_register_op("groupby_aggregate")
+def _op_groupby_aggregate(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """GroupBy stats merged back into the DataFrame."""
+    group_col = params.get("group_column", "")
+    agg_col = params.get("agg_column", "")
+    agg_func = params.get("agg_func", "mean")
+    new_name = params.get("new_name", f"{group_col}_{agg_func}_{agg_col}")
+    _validate_columns(df, [group_col, agg_col], "groupby_aggregate")
+    allowed = {"mean", "std", "count", "min", "max"}
+    if agg_func not in allowed:
+        raise ValueError(
+            f"groupby_aggregate: unknown agg_func '{agg_func}'. "
+            f"Use one of {sorted(allowed)}."
+        )
+    agg_series = df.groupby(group_col)[agg_col].transform(agg_func)
+    df[new_name] = agg_series
+    return df
+
+
+@_register_op("polynomial_features")
+def _op_polynomial_features(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Generate polynomial and interaction features."""
+    columns = params.get("columns", [])
+    degree = params.get("degree", 2)
+    interaction_only = params.get("interaction_only", False)
+    _validate_columns(df, columns, "polynomial_features")
+    poly = PolynomialFeatures(
+        degree=degree, interaction_only=interaction_only, include_bias=False,
+    )
+    transformed = poly.fit_transform(df[columns].values)
+    names = poly.get_feature_names_out(columns)
+    poly_df = pd.DataFrame(transformed, columns=names, index=df.index)
+    df = df.drop(columns=columns)
+    return pd.concat([df, poly_df], axis=1)
+
+
+@_register_op("bin_numeric")
+def _op_bin_numeric(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Bin numeric columns into discrete intervals."""
+    columns = params.get("columns", [])
+    n_bins = params.get("n_bins", 5)
+    strategy = params.get("strategy", "quantile")
+    _validate_columns(df, columns, "bin_numeric")
+    kbd = KBinsDiscretizer(n_bins=n_bins, encode="ordinal", strategy=strategy)
+    df[columns] = kbd.fit_transform(df[columns].values)
+    return df
+
+
+@_register_op("feature_select")
+def _op_feature_select(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Select features by mutual info or variance threshold."""
+    target_col = params.get("target_column", "")
+    method = params.get("method", "mutual_info")
+    _validate_columns(df, [target_col], "feature_select")
+    feature_cols = [c for c in df.columns if c != target_col]
+    numeric_features = df[feature_cols].select_dtypes(include=["number"]).columns
+    if method == "mutual_info":
+        k = params.get("k", 10)
+        y = df[target_col]
+        x = df[numeric_features]
+        if pd.api.types.is_float_dtype(y):
+            mi = mutual_info_regression(x, y, random_state=42)
+        else:
+            mi = mutual_info_classif(x, y, random_state=42)
+        top_k = sorted(
+            zip(numeric_features, mi), key=lambda t: t[1], reverse=True,
+        )[:k]
+        keep = [c for c, _ in top_k] + [target_col]
+        non_numeric = [c for c in feature_cols if c not in numeric_features]
+        keep.extend(non_numeric)
+        return df[keep]
+    if method == "variance_threshold":
+        threshold = params.get("threshold", 0.0)
+        selector = VarianceThreshold(threshold=threshold)
+        x = df[numeric_features]
+        selector.fit(x)
+        mask = selector.get_support()
+        keep_num = numeric_features[mask].tolist()
+        non_numeric = [c for c in feature_cols if c not in numeric_features]
+        return df[keep_num + non_numeric + [target_col]]
+    raise ValueError(
+        f"feature_select: unknown method '{method}'. "
+        "Use 'mutual_info' or 'variance_threshold'."
+    )
+
+
+@_register_op("rank_transform")
+def _op_rank_transform(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Replace values with their rank (ties averaged)."""
+    columns = params.get("columns", [])
+    _validate_columns(df, columns, "rank_transform")
+    for col in columns:
+        df[col] = df[col].rank(method="average")
+    return df
+
+
+@_register_op("power_transform")
+def _op_power_transform(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Apply power transform (Yeo-Johnson or Box-Cox)."""
+    columns = params.get("columns", [])
+    method = params.get("method", "yeo-johnson")
+    _validate_columns(df, columns, "power_transform")
+    pt = PowerTransformer(method=method)
+    df[columns] = pt.fit_transform(df[columns].values)
+    return df
+
+
+@_register_op("cyclic_encode")
+def _op_cyclic_encode(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Sin/cos encoding for cyclical features (hours, months)."""
+    column = params.get("column", "")
+    period = params.get("period", 1)
+    _validate_columns(df, [column], "cyclic_encode")
+    df[f"{column}_sin"] = np.sin(2 * np.pi * df[column] / period)
+    df[f"{column}_cos"] = np.cos(2 * np.pi * df[column] / period)
+    df = df.drop(columns=[column])
+    return df
+
+
+@_register_op("ratio_features")
+def _op_ratio_features(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Create a ratio feature: numerator / (denominator + 1e-8)."""
+    numerator = params.get("numerator", "")
+    denominator = params.get("denominator", "")
+    name = params.get("name", f"{numerator}_over_{denominator}")
+    _validate_columns(df, [numerator, denominator], "ratio_features")
+    df[name] = df[numerator] / (df[denominator] + 1e-8)
+    return df
+
+
+@_register_op("categorical_interaction")
+def _op_categorical_interaction(
+    df: pd.DataFrame, params: dict[str, Any],
+) -> pd.DataFrame:
+    """Concatenate two categoricals and label encode the result."""
+    columns = params.get("columns", [])
+    if len(columns) != 2:
+        raise ValueError(
+            "categorical_interaction requires exactly 2 columns."
+        )
+    _validate_columns(df, columns, "categorical_interaction")
+    col_a, col_b = columns
+    new_col = f"{col_a}_x_{col_b}"
+    df[new_col] = df[col_a].astype(str) + "_" + df[col_b].astype(str)
+    le = LabelEncoder()
+    df[new_col] = le.fit_transform(df[new_col])
     return df

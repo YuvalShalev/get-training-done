@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "get-training-done"
-version = "0.2.1"
+version = "0.3.0"
 description = "AI-powered ML optimization for Claude Code"
 readme = "README.md"
 license = "MIT"
@@ -38,6 +38,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+tabpfn = ["tabpfn>=2.0"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",

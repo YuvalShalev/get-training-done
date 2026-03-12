@@ -339,6 +339,23 @@ MLP_REGRESSOR_SPEC = ModelSpec(
     tags=("neural_network", "nonlinear"),
 )
 
+# ─── Pre-trained Models ───────────────────────────────────────────────────────
+
+TABPFN_SPEC = ModelSpec(
+    name="tabpfn",
+    display_name="TabPFN",
+    description=(
+        "Pre-trained transformer for small tabular data (<10k rows, <100 features)"
+    ),
+    task_types=("binary_classification", "multiclass_classification"),
+    sklearn_class="tabpfn.TabPFNClassifier",
+    hyperparameters=(
+        HyperparameterSpec("N_ensemble_configurations", "int", 32, 4, 64),
+    ),
+    supports_feature_importance=False,
+    tags=("transformer", "small_data", "pretrained"),
+)
+
 # ─── Registry ─────────────────────────────────────────────────────────────────
 
 ALL_MODELS: dict[str, ModelSpec] = {
@@ -358,6 +375,7 @@ ALL_MODELS: dict[str, ModelSpec] = {
         SVR_SPEC,
         KNN_REGRESSOR_SPEC,
         MLP_REGRESSOR_SPEC,
+        TABPFN_SPEC,
     ]
 }
 
@@ -434,7 +452,10 @@ def instantiate_model(
         init_params["random_state"] = random_state
 
     # Model-specific adjustments
-    if model_name == "xgboost":
+    if model_name == "tabpfn":
+        # TabPFN does not accept random_state in __init__
+        init_params.pop("random_state", None)
+    elif model_name == "xgboost":
         init_params["verbosity"] = 0
         init_params["use_label_encoder"] = False
         if task_type == "multiclass_classification":
@@ -453,10 +474,26 @@ def instantiate_model(
 
 
 def _resolve_model_class(spec: ModelSpec, task_type: str) -> type:
-    """Resolve the actual model class, swapping classifier for regressor as needed."""
+    """Resolve the actual model class, swapping classifier for regressor as needed.
+
+    Raises:
+        ImportError: If a third-party package (e.g. tabpfn) is not installed.
+    """
     class_path = spec.sklearn_class
 
     is_regression = task_type == "regression"
+
+    # TabPFN only supports classification; no classifier/regressor swapping needed
+    if spec.name == "tabpfn":
+        module_path, class_name = class_path.rsplit(".", 1)
+        import importlib
+        try:
+            module = importlib.import_module(module_path)
+        except ModuleNotFoundError as exc:
+            raise ImportError(
+                "TabPFN not installed. Install with: pip install tabpfn"
+            ) from exc
+        return getattr(module, class_name)
 
     # Map classifier class paths to regressor equivalents
     if is_regression:

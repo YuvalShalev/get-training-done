@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-12
+
+### Added
+- 11 advanced feature engineering operations: target encoding, frequency encoding, groupby aggregation, polynomial features, binning, feature selection, rank transform, power transform, cyclic encoding, ratio features, categorical interaction
+- Ensemble training via `train_ensemble`: stacking, hill climbing, and seed ensembling strategies
+- TabPFN model support for small datasets (optional dependency: `pip install tabpfn`)
+- Structured research insights via `research_and_extract` — unified search + extraction in one call
+- Research-driven optimization protocol in train workflow
+- Response compression for better context management
+
+### Changed
+- `auto_preprocess` now uses target encoding for high-cardinality categoricals when target column is available
+- train.md updated with ensemble protocol, research integration, and tighter context rules
+- `engineer_features` docstring updated with all 19 available operations
+
 ## [0.2.1] - 2026-03-11
 
 ### Added

@@ -8,6 +8,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from gtd.research.arxiv_client import search_arxiv as _search_arxiv
+from gtd.research.insight_extractor import extract_insights
 from gtd.research.kaggle_client import (
     search_kaggle_datasets as _search_kaggle_datasets,
 )
@@ -103,6 +104,84 @@ def search_papers_with_code(query: str, task_type: str | None = None, max_result
     except Exception as exc:
         return _to_json({
             "error": f"Unexpected error searching Papers with Code: {exc}",
+            "query": query,
+        })
+
+
+@mcp.tool()
+def research_and_extract(
+    query: str,
+    task_type: str = "",
+    dataset_profile_json: str = "",
+    sources: str = "arxiv,kaggle",
+    max_results: int = 5,
+) -> str:
+    """Search multiple sources and extract structured insights in one call.
+
+    Combines search_arxiv, search_kaggle_notebooks, and search_papers_with_code
+    results into ~200 tokens of actionable insights instead of ~2000 tokens
+    of raw results.
+
+    Args:
+        query: Search query string.
+        task_type: Task type (e.g., "binary_classification").
+        dataset_profile_json: JSON string of dataset profile for context-aware
+            recommendations. Keys: n_rows, n_cols, n_numeric, n_categorical.
+        sources: Comma-separated sources to search. Options: "arxiv", "kaggle",
+            "pwc". Default: "arxiv,kaggle".
+        max_results: Maximum results per source (default 5).
+
+    Returns:
+        JSON string with recommended_models, hp_hints, feature_tips,
+        competition_strategies, and summary.
+    """
+    source_list = [s.strip().lower() for s in sources.split(",") if s.strip()]
+
+    dataset_profile: dict[str, Any] | None = None
+    if dataset_profile_json:
+        try:
+            dataset_profile = json.loads(dataset_profile_json)
+        except (json.JSONDecodeError, TypeError):
+            dataset_profile = None
+
+    arxiv_results: dict[str, Any] | None = None
+    kaggle_results: dict[str, Any] | None = None
+    pwc_results: dict[str, Any] | None = None
+
+    if "arxiv" in source_list:
+        try:
+            arxiv_results = _search_arxiv(query=query, max_results=max_results)
+        except Exception as exc:
+            arxiv_results = {"error": str(exc), "results": []}
+
+    if "kaggle" in source_list:
+        try:
+            kaggle_results = _search_kaggle_notebooks(
+                query=query, max_results=max_results,
+            )
+        except Exception as exc:
+            kaggle_results = {"error": str(exc), "results": []}
+
+    if "pwc" in source_list:
+        try:
+            pwc_results = _search_papers_with_code(
+                query=query, max_results=max_results,
+            )
+        except Exception as exc:
+            pwc_results = {"error": str(exc), "results": []}
+
+    try:
+        insights = extract_insights(
+            arxiv_results=arxiv_results,
+            kaggle_results=kaggle_results,
+            pwc_results=pwc_results,
+            task_type=task_type,
+            dataset_profile=dataset_profile,
+        )
+        return _to_json(insights)
+    except Exception as exc:
+        return _to_json({
+            "error": f"Insight extraction failed: {exc}",
             "query": query,
         })
 

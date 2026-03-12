@@ -8,7 +8,7 @@
 [![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet.svg)](https://claude.com/claude-code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Train and optimize ML models the way a senior data scientist would — with data profiling, research awareness, transparent reasoning, and configurable time budgets. All from your terminal.
+Train and optimize ML models the way a senior data scientist would — with data profiling, research awareness, advanced feature engineering, ensemble strategies, and configurable time budgets. All from your terminal.
 
 ## Quick Start
 
@@ -72,8 +72,8 @@ graph LR
     end
     subgraph "MCP Servers"
         DS["gtd-data · 5 tools"]
-        TS["gtd-training · 12 tools"]
-        RS["gtd-research · 4 tools"]
+        TS["gtd-training · 13 tools"]
+        RS["gtd-research · 5 tools"]
     end
     subgraph "Core"
         DP[data_profiler] & TR[trainer] & EV[evaluator] & ML[meta_learner]
@@ -99,6 +99,8 @@ Traditional AutoML treats hyperparameter tuning as a pure search problem. GTD us
 - **Analyzes data first** — profiles distributions, detects class imbalance, finds leakage before training
 - **Researches what works** — searches arXiv and Kaggle for approaches that succeed on similar data
 - **Makes informed decisions** — selects models based on data characteristics, not queue order
+- **Advanced feature engineering** — target encoding, power transforms, cyclic encoding, and 8 more operations
+- **Ensemble strategies** — stacking, hill climbing, and seed ensembling for competition-grade results
 - **Explains everything** — every choice is justified with evidence
 - **Knows when to stop** — convergence detection based on diminishing returns
 
@@ -116,9 +118,17 @@ Traditional AutoML treats hyperparameter tuning as a pure search problem. GTD us
 | SVM | Small-medium datasets |
 | KNN | Low-dimensional with clear clusters |
 | MLP | Complex nonlinear patterns |
+| TabPFN | Small datasets (<10k rows, optional: `pip install tabpfn`) |
 
 ### Regression
-All tree-based models above plus Linear Regression, ElasticNet, SVR, KNN Regressor, MLP Regressor.
+All tree-based models above (except TabPFN) plus Linear Regression, ElasticNet, SVR, KNN Regressor, MLP Regressor.
+
+### Ensembling
+| Strategy | Description |
+|----------|-------------|
+| Stacking | Train base models with OOF predictions, meta-learner combines them |
+| Hill Climbing | Greedily select models that improve ensemble score |
+| Seed Ensemble | Same model with different random seeds, averaged predictions |
 
 ## MCP Tools Reference
 
@@ -135,7 +145,8 @@ All tree-based models above plus Linear Regression, ElasticNet, SVR, KNN Regress
 - `get_feature_importance` — Built-in or permutation importance with plots
 - `get_roc_curve` / `get_pr_curve` — Curve visualizations
 - `compare_runs` — Side-by-side model comparison
-- `engineer_features` — One-hot encoding, imputation, scaling, interactions
+- `engineer_features` — 19 operations: one-hot, label encode, scale, log, impute, drop, interaction, target encode, frequency encode, groupby aggregate, polynomial features, binning, feature selection, rank transform, power transform, cyclic encode, ratio features, categorical interaction
+- `train_ensemble` — Stacking, hill climbing, or seed ensemble strategies
 - `export_model` — Save best model for deployment
 - `predict` — Score new data
 - `get_optimization_history` — Full run history
@@ -147,6 +158,7 @@ All tree-based models above plus Linear Regression, ElasticNet, SVR, KNN Regress
 - `search_kaggle_datasets` — Find similar datasets
 - `search_kaggle_notebooks` — Find winning competition solutions
 - `search_papers_with_code` — Find state-of-the-art methods
+- `research_and_extract` — Unified search + structured insight extraction in one call
 
 ## Examples
 
