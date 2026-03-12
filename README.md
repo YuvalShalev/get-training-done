@@ -53,7 +53,7 @@ graph TD
     A["/gtd:train data.csv"] --> B["Phase 1: Data Understanding<br/>Profile, detect issues, correlations"]
     B --> C["Phase 2: Research<br/>arXiv, Kaggle, Papers with Code"]
     C --> D["Phase 3: Baselines<br/>2-3 diverse models, default params"]
-    D --> E["Phase 4: Optimization<br/>Iterative HP tuning with evidence"]
+    D --> E["Phase 4: Optimization<br/>Iterative HP tuning with<br/>error analysis & evidence"]
     E --> F{"Converged?"}
     F -->|No| E
     F -->|Yes| G["Phase 5: Export & Report<br/>Best model + visualizations"]
