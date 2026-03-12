@@ -8,7 +8,7 @@
 [![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-blueviolet.svg)](https://claude.com/claude-code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Train and optimize ML models the way a senior data scientist would — with data profiling, research awareness, and transparent reasoning. All from your terminal.
+Train and optimize ML models the way a senior data scientist would — with data profiling, research awareness, transparent reasoning, and configurable time budgets. All from your terminal.
 
 ## Quick Start
 
@@ -21,6 +21,14 @@ Then:
 ```
 /gtd:train path/to/data.csv
 ```
+
+Set a time budget to control how long optimization runs:
+
+```
+/gtd:train path/to/data.csv --time 30m
+```
+
+Formats: `5m`, `30m`, `1h`, `1.5h` (default: `10m`).
 
 That's it. GTD profiles your data, researches approaches, trains baselines, optimizes hyperparameters, and exports the best model.
 
