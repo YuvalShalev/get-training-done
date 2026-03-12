@@ -34,7 +34,6 @@ That's it. GTD profiles your data, researches approaches, trains baselines, opti
 | `/gtd:inference` | Run predictions on new data |
 | `/gtd:evaluate` | Evaluate model on labeled test data |
 | `/gtd:models` | List all trained models |
-| `/gtd:evolve` | Evolve training prompts with DSPy |
 
 ## How It Works
 
@@ -60,7 +59,7 @@ Every decision is justified. The agent explains why it picked XGBoost over Rando
 ```mermaid
 graph LR
     subgraph "Claude Code"
-        CMD["7 Slash Commands"]
+        CMD["6 Slash Commands"]
     end
     subgraph "MCP Servers"
         DS["gtd-data · 5 tools"]
@@ -81,7 +80,6 @@ GTD saves what worked across sessions — strategies, hyperparameter sweet spots
 
 - **Global knowledge** at `~/.claude/gtd/` persists insights across all projects
 - **Project-level** learnings stored in the workspace directory
-- **Prompt evolution** via `/gtd:evolve` uses DSPy to optimize the decision protocol after 10+ sessions
 
 See [docs/learning-lifecycle.md](docs/learning-lifecycle.md) for details.
 

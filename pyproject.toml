@@ -38,7 +38,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-evolve = ["dspy-ai>=2.5"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
