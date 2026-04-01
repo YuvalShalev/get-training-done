@@ -353,7 +353,25 @@ TABPFN_SPEC = ModelSpec(
         HyperparameterSpec("N_ensemble_configurations", "int", 32, 4, 64),
     ),
     supports_feature_importance=False,
-    tags=("transformer", "small_data", "pretrained"),
+    tags=("transformer", "small_data", "pretrained", "deep"),
+)
+
+TABICL_SPEC = ModelSpec(
+    name="tabicl",
+    display_name="TabICL",
+    description=(
+        "Tabular foundation model — state-of-the-art without tuning (up to 100k rows)"
+    ),
+    task_types=("binary_classification", "multiclass_classification", "regression"),
+    sklearn_class="tabicl.TabICLClassifier",
+    hyperparameters=(
+        HyperparameterSpec(
+            "n_estimators", "int", 8, 1, 32, description="Ensemble size"
+        ),
+    ),
+    supports_feature_importance=False,
+    supports_predict_proba=True,
+    tags=("transformer", "foundation_model", "pretrained", "deep"),
 )
 
 # ─── Registry ─────────────────────────────────────────────────────────────────
@@ -376,6 +394,7 @@ ALL_MODELS: dict[str, ModelSpec] = {
         KNN_REGRESSOR_SPEC,
         MLP_REGRESSOR_SPEC,
         TABPFN_SPEC,
+        TABICL_SPEC,
     ]
 }
 
@@ -452,8 +471,8 @@ def instantiate_model(
         init_params["random_state"] = random_state
 
     # Model-specific adjustments
-    if model_name == "tabpfn":
-        # TabPFN does not accept random_state in __init__
+    if model_name in ("tabpfn", "tabicl"):
+        # Foundation models do not accept random_state in __init__
         init_params.pop("random_state", None)
     elif model_name == "xgboost":
         init_params["verbosity"] = 0
@@ -483,16 +502,23 @@ def _resolve_model_class(spec: ModelSpec, task_type: str) -> type:
 
     is_regression = task_type == "regression"
 
-    # TabPFN only supports classification; no classifier/regressor swapping needed
-    if spec.name == "tabpfn":
+    # Deep / foundation models: resolve via importlib with friendly install hints
+    _deep_install_hints = {
+        "tabpfn": "TabPFN not installed. Run: <plugin>/.venv/bin/pip install tabpfn",
+        "tabicl": (
+            "TabICL not installed. Run: bash scripts/install-deep.sh"
+            " from the plugin directory"
+        ),
+    }
+    if spec.name in _deep_install_hints:
         module_path, class_name = class_path.rsplit(".", 1)
+        if is_regression:
+            class_name = class_name.replace("Classifier", "Regressor")
         import importlib
         try:
             module = importlib.import_module(module_path)
         except ModuleNotFoundError as exc:
-            raise ImportError(
-                "TabPFN not installed. Install with: pip install tabpfn"
-            ) from exc
+            raise ImportError(_deep_install_hints[spec.name]) from exc
         return getattr(module, class_name)
 
     # Map classifier class paths to regressor equivalents

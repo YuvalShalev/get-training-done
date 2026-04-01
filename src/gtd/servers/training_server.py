@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -938,6 +940,186 @@ def export_model(
         return json.dumps(result, default=str)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def get_session_time(workspace_path: str) -> str:
+    """Get elapsed wall-clock time since the training session started.
+
+    Call this anytime between training runs to check how much time has passed.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+
+    Returns:
+        JSON with session_elapsed (seconds) and formatted string.
+    """
+    try:
+        session_start = trainer._load_session_start(workspace_path)
+        if session_start is None:
+            return json.dumps({"error": "No session started yet"})
+        elapsed = time.time() - session_start
+        minutes, seconds = divmod(int(elapsed), 60)
+        formatted = f"{minutes}m{seconds:02d}s" if minutes else f"{seconds}s"
+        return json.dumps({
+            "session_elapsed": round(elapsed, 1),
+            "formatted": formatted,
+        })
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+@mcp.tool()
+def get_training_progress(workspace_path: str) -> str:
+    """Check progress of a currently running training job.
+
+    Returns the model type, current fold, total folds, latest fold score,
+    and elapsed time. Use this to monitor long-running models like TabICL.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+
+    Returns:
+        JSON with training progress or status indicating no training in progress.
+    """
+    try:
+        ws = Path(workspace_path)
+        progress_files = list(ws.glob("training_progress_*.json"))
+        if not progress_files:
+            return json.dumps({"status": "no_training_in_progress"})
+        all_progress = []
+        for pf in progress_files:
+            try:
+                all_progress.append(json.loads(pf.read_text()))
+            except (json.JSONDecodeError, OSError):
+                continue
+        if not all_progress:
+            return json.dumps({"status": "no_training_in_progress"})
+        if len(all_progress) == 1:
+            return json.dumps(all_progress[0])
+        return json.dumps({"jobs_in_progress": all_progress})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+# ─── Async Training ───────────────────────────────────────────────────────────
+
+_training_jobs: dict[str, dict[str, Any]] = {}
+_jobs_lock = threading.Lock()
+
+
+@mcp.tool()
+def train_model_async(
+    workspace_path: str,
+    data_path: str,
+    model_type: str,
+    hyperparameters: dict[str, Any],
+    feature_columns: list[str],
+    target_column: str,
+    task_type: str,
+    cv_folds: int = 5,
+    random_state: int = 42,
+    memory_dir: str = "",
+) -> str:
+    """Start model training in the background and return immediately.
+
+    Same parameters as train_model, but runs asynchronously. Use
+    poll_training_jobs to check status and collect results.
+
+    Args:
+        workspace_path: Path to the workspace directory.
+        data_path: Path to the training CSV file.
+        model_type: Model name from the registry.
+        hyperparameters: Hyperparameter overrides.
+        feature_columns: List of feature column names.
+        target_column: Name of the target column.
+        task_type: Task type string.
+        cv_folds: Number of cross-validation folds.
+        random_state: Random seed.
+        memory_dir: Path to auto-memory directory.
+
+    Returns:
+        JSON with job_id and status "running".
+    """
+    import itertools as _itertools
+
+    if not hasattr(train_model_async, "_counter"):
+        train_model_async._counter = _itertools.count()  # type: ignore[attr-defined]
+    job_id = f"job_{model_type}_{next(train_model_async._counter)}"  # type: ignore[attr-defined]
+
+    def _run() -> None:
+        try:
+            result = trainer.train_model(
+                workspace_path=workspace_path,
+                data_path=data_path,
+                model_type=model_type,
+                hyperparameters=hyperparameters,
+                feature_columns=feature_columns,
+                target_column=target_column,
+                task_type=task_type,
+                cv_folds=cv_folds,
+                random_state=random_state,
+                memory_dir=memory_dir,
+            )
+            compressed = _compress_train_response(result)
+            with _jobs_lock:
+                _training_jobs[job_id]["status"] = "completed"
+                _training_jobs[job_id]["result"] = compressed
+        except Exception as exc:
+            with _jobs_lock:
+                _training_jobs[job_id]["status"] = "failed"
+                _training_jobs[job_id]["error"] = str(exc)
+
+    with _jobs_lock:
+        _training_jobs[job_id] = {
+            "model_type": model_type,
+            "status": "running",
+            "started_at": time.time(),
+        }
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return json.dumps({"job_id": job_id, "status": "running", "model_type": model_type})
+
+
+@mcp.tool()
+def poll_training_jobs(workspace_path: str) -> str:
+    """Check status of all async training jobs.
+
+    Returns a list of all jobs with their current status. Completed jobs
+    include the full training result. Use this to monitor jobs started
+    with train_model_async.
+
+    Args:
+        workspace_path: Path to the workspace directory (for context).
+
+    Returns:
+        JSON with jobs list, each containing job_id, model_type, status,
+        and result (if completed) or error (if failed).
+    """
+    with _jobs_lock:
+        jobs = []
+        done_ids = []
+        for jid, job in _training_jobs.items():
+            entry: dict[str, Any] = {
+                "job_id": jid,
+                "model_type": job["model_type"],
+                "status": job["status"],
+            }
+            if job["status"] == "completed":
+                entry["result"] = job["result"]
+                done_ids.append(jid)
+            elif job["status"] == "failed":
+                entry["error"] = job.get("error", "unknown error")
+                done_ids.append(jid)
+            elif job["status"] == "running":
+                entry["elapsed"] = round(time.time() - job["started_at"], 1)
+            jobs.append(entry)
+        # Clean up finished jobs to prevent unbounded growth
+        for jid in done_ids:
+            del _training_jobs[jid]
+    return json.dumps({"jobs": jobs})
 
 
 if __name__ == "__main__":

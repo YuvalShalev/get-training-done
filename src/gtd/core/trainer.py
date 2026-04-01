@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,10 @@ from gtd.core import model_registry, workspace
 logger = logging.getLogger(__name__)
 
 _RUN_ID_RE = __import__("re").compile(r"^[a-zA-Z0-9_\-]+$")
+
+# Lock for workspace write operations (run log, metadata, run IDs).
+# All MCP tool calls run in the same process, so a threading lock is sufficient.
+_workspace_lock = threading.Lock()
 
 
 def _validate_run_id(run_id: str) -> None:
@@ -101,8 +106,10 @@ def train_model(
     start = time.time()
 
     # Run cross-validation fold by fold
+    # Use thread ID in filename so concurrent jobs don't overwrite each other
+    progress_path = ws / f"training_progress_{threading.get_ident()}.json"
     cv_scores: list[float] = []
-    for train_idx, val_idx in cv.split(X, y):
+    for fold_idx, (train_idx, val_idx) in enumerate(cv.split(X, y)):
         X_train, X_val = X[train_idx], X[val_idx]
         y_train, y_val = y[train_idx], y[val_idx]
 
@@ -114,6 +121,16 @@ def train_model(
         fold_score = _score_model(fold_model, X_val, y_val, metric_name)
         cv_scores.append(fold_score)
 
+        # Write per-fold progress for polling via get_training_progress
+        progress = {
+            "model_type": model_type,
+            "fold": fold_idx + 1,
+            "total_folds": cv_folds,
+            "fold_score": round(fold_score, 4),
+            "elapsed": round(time.time() - start, 1),
+        }
+        progress_path.write_text(json.dumps(progress))
+
     # Train the final model on all data
     final_model = model_registry.instantiate_model(
         model_type, task_type, hyperparameters, random_state,
@@ -124,50 +141,70 @@ def train_model(
     mean_score = float(np.mean(cv_scores))
     std_score = float(np.std(cv_scores))
 
-    # Generate sequential run_id
-    run_id = _generate_run_id(ws, model_type)
-    run_dir = workspace.get_run_dir(ws, run_id)
+    # Clear progress file — training complete
+    if progress_path.exists():
+        progress_path.unlink()
 
-    # Save model
-    model_path = str(run_dir / "model.joblib")
-    joblib.dump(final_model, model_path)
+    # Lock the entire workspace-write section: ID generation, file saves, registration,
+    # and run log. Single lock acquisition prevents race conditions when multiple
+    # training jobs run concurrently.
+    with _workspace_lock:
+        # Generate sequential run_id
+        run_id = _generate_run_id(ws, model_type)
+        run_dir = workspace.get_run_dir(ws, run_id)
 
-    # Save config.json
-    config = {
-        "model_type": model_type,
-        "hyperparameters": hyperparameters,
-        "feature_columns": feature_columns,
-        "target_column": target_column,
-        "task_type": task_type,
-        "cv_folds": cv_folds,
-        "random_state": random_state,
-        "data_path": data_path,
-        "source_data_path": data_path,
-    }
-    workspace.save_run_artifact(ws, run_id, "config.json", config)
+        # Save model
+        model_path = str(run_dir / "model.joblib")
+        joblib.dump(final_model, model_path)
 
-    # Save metrics.json
-    metrics = {
-        "cv_scores": cv_scores,
-        "mean_score": mean_score,
-        "std_score": std_score,
-        "training_time": training_time,
-        "metric_name": metric_name,
-    }
-    workspace.save_run_artifact(ws, run_id, "metrics.json", metrics)
+        # Save config.json
+        config = {
+            "model_type": model_type,
+            "hyperparameters": hyperparameters,
+            "feature_columns": feature_columns,
+            "target_column": target_column,
+            "task_type": task_type,
+            "cv_folds": cv_folds,
+            "random_state": random_state,
+            "data_path": data_path,
+            "source_data_path": data_path,
+        }
+        workspace.save_run_artifact(ws, run_id, "config.json", config)
 
-    # Register run in workspace metadata
-    workspace.register_run(
-        ws,
-        run_id,
-        model_type,
-        hyperparameters,
-        feature_columns,
-        metrics={metric_name: mean_score, "std": std_score},
-    )
+        # Save metrics.json
+        metrics = {
+            "cv_scores": cv_scores,
+            "mean_score": mean_score,
+            "std_score": std_score,
+            "training_time": training_time,
+            "metric_name": metric_name,
+        }
+        workspace.save_run_artifact(ws, run_id, "metrics.json", metrics)
 
-    # Update best run if applicable
-    _maybe_update_best_run(ws, run_id, mean_score, metric_name, task_type)
+        # Register run in workspace metadata
+        workspace.register_run(
+            ws,
+            run_id,
+            model_type,
+            hyperparameters,
+            feature_columns,
+            metrics={metric_name: mean_score, "std": std_score},
+        )
+
+        # Update best run if applicable
+        _maybe_update_best_run(ws, run_id, mean_score, metric_name, task_type)
+
+        # Append to structured run log
+        run_entry = {
+            "run_id": run_id,
+            "model_type": model_type,
+            "mean_score": mean_score,
+            "std_score": std_score,
+            "hyperparameters": hyperparameters,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        _append_run_log(str(ws), run_entry)
+        run_count = _get_run_count(str(ws))
 
     result: dict[str, Any] = {
         "run_id": run_id,
@@ -177,6 +214,7 @@ def train_model(
         "training_time": training_time,
         "model_path": model_path,
     }
+    result["run_number"] = run_count
 
     # Persist memory_dir for later auto-discovery by export_model
     if memory_dir:
@@ -184,27 +222,12 @@ def train_model(
 
     # === Side effects: automatic data collection ===
 
-    # A. Auto-append to structured run log
-    run_entry = {
-        "run_id": run_id,
-        "model_type": model_type,
-        "mean_score": mean_score,
-        "std_score": std_score,
-        "hyperparameters": hyperparameters,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    _append_run_log(str(ws), run_entry)
-
-    # B. Count runs and include in response
-    run_count = _get_run_count(str(ws))
-    result["run_number"] = run_count
-
-    # B2. Session wall-clock time
+    # Session wall-clock time
     session_start = _load_session_start(str(ws))
     if session_start is not None:
         result["session_elapsed"] = time.time() - session_start
 
-    # C. On first call: store dataset fingerprint and session start (fallback)
+    # On first call: store dataset fingerprint and session start (fallback)
     if run_count == 1:
         if _load_session_start(str(ws)) is None:
             _store_session_start(str(ws), time.time())

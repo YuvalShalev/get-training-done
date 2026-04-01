@@ -1,6 +1,6 @@
 ---
 description: Train and optimize ML models on a dataset
-argument-hint: "path/to/data.csv [--target COL] [--time DURATION] [--target-metric METRIC>VALUE]"
+argument-hint: "path/to/data.csv [--target COL] [--time DURATION] [--target-metric METRIC>VALUE] [--deep yes/no] [--agents N]"
 ---
 
 # GTD: Train & Optimize
@@ -40,6 +40,8 @@ Parse from the argument string:
 - `--target COL` (optional) — target column name. If omitted, auto-detect during profiling
 - `--time DURATION` (optional, default **"10m"**) — time budget for optimization. Formats: `"5m"`, `"30m"`, `"1h"`, `"1.5h"`
 - `--target-metric METRIC>VALUE` (optional) — e.g. `accuracy>0.95` or `f1_macro>0.8`. Stop early if achieved
+- `--deep yes/no` (optional, default **"no"**) — enable deep learning foundation models (TabICL, TabPFN). If yes, install missing dependencies automatically
+- `--agents N` (optional, default **1**) — number of parallel training agents. When >1, uses `train_model_async` + `poll_training_jobs` to run N models concurrently per round
 
 Parse `DURATION` into `TIME_BUDGET_SECONDS` (e.g., "5m" → 300, "1.5h" → 5400). Store these as variables for use throughout the workflow.
 
@@ -228,13 +230,21 @@ Print: `## Phase 3b: Remaining Baselines`
 
 ### Baselines
 
-Train 1-3 baseline models to establish benchmarks. Choose based on dataset characteristics, prior experience, EDA complexity, and research insights. Available levels: simple (logistic/linear), tree-based (RF, XGBoost, LightGBM, CatBoost), advanced (MLP, TabPFN). Don't waste runs on models that prior knowledge flags as poor fits.
+Train 1-3 baseline models to establish benchmarks. Choose based on dataset characteristics, prior experience, EDA complexity, and research insights. Available levels: simple (logistic/linear), tree-based (RF, XGBoost, LightGBM, CatBoost), advanced (MLP, TabPFN, TabICL). Don't waste runs on models that prior knowledge flags as poor fits.
 
 - If research recommended specific models, include one in baselines
-- If dataset < 10k rows and < 100 features, try TabPFN as a baseline
-  - If TabPFN fails with an import/install error, ask the user: "TabPFN is recommended for this small dataset but isn't installed. Install it? (`pip install tabpfn`)"
-  - If user agrees, run `pip install tabpfn` in the project environment, then retry the TabPFN baseline
-  - If user declines, skip TabPFN and continue with other models
+- If `--deep yes`:
+  - **Find the plugin root first**: Run `dirname $(dirname $(which gtd 2>/dev/null || find ~/.claude -name "install-deep.sh" -path "*/get-training-done/*" 2>/dev/null | head -1))` or simply search for the install script: `find ~/.claude -name "install-deep.sh" -path "*get-training-done*" 2>/dev/null | head -1`. Save the plugin root path (the directory containing `scripts/install-deep.sh`) as `PLUGIN_ROOT`.
+  - **Install TabICL**: The MCP servers run in the **plugin's own venv**, not the user's project. Run:
+    `bash $PLUGIN_ROOT/scripts/install-deep.sh`
+    The script handles Python 3.12 setup, venv rebuild, tabicl install, and triggers MCP server restart automatically. After it finishes, wait 10 seconds for servers to reload, then verify by calling `get_session_time` on the gtd-training server — any successful response confirms the server restarted with the new packages. Only then proceed with TabICL training.
+  - If TabPFN is also applicable (classification, <10k rows, <100 features), install it too:
+    `$PLUGIN_ROOT/.venv/bin/pip install tabpfn`
+  - **Check device**: After install, run `$PLUGIN_ROOT/.venv/bin/python -c "import torch; print('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')"` to detect the available accelerator. Print the result (e.g., `Deep learning device: mps`). On Apple Silicon (M1-M5), MPS is available and TabICL will use it automatically. CPU-only is fine for small datasets but will be slow on large ones
+  - Include TabICL as a baseline (all task types, up to ~100k rows). TabICL is a foundation model that often matches tuned tree models out of the box
+  - Include TabPFN as a baseline (classification only, <10k rows, <100 features)
+  - **Run in parallel**: Deep learning models can be slow. Send MULTIPLE `train_model` calls in the SAME message — one for TabICL and one for a tree-based model (e.g., LightGBM). The MCP server handles concurrent requests. Don't wait for TabICL to finish before starting tree models. Use `get_training_progress` on the gtd-training server to check if a long-running model is still progressing (shows current fold, score, elapsed time)
+- If `--deep no` (default): skip TabICL and TabPFN
 
 Always pass `train_data_path` as `data_path`.
 
@@ -270,6 +280,8 @@ After each `train_model` call, read time from the response:
 - `ELAPSED_TIME = session_elapsed` (from the `train_model` response — wall-clock since first training call)
 - `remaining` = TIME_BUDGET_SECONDS - ELAPSED_TIME
 - `avg_run_time` = ELAPSED_TIME / runs_completed
+
+If you need elapsed time between training runs (e.g., during feature engineering or error analysis), call `get_session_time` on the gtd-training server.
 
 Format elapsed/remaining as human-readable: e.g., 65s → "1m05s", 400s → "6m40s".
 
@@ -344,6 +356,36 @@ If the current approach has plateaued but time remains:
 A plateau in one model family is NOT a reason to stop — it's a reason to pivot.
 
 Print: `Stopping: {reason} | Total: {elapsed} | Runs: {n}`
+
+#### Parallel Optimization Protocol (when --agents > 1)
+
+When `--agents N` is set to more than 1, Phase 4 runs in **synchronized rounds** instead of sequential runs. Use `train_model_async` and `poll_training_jobs` on the gtd-training server.
+
+**Round structure:**
+
+1. **Plan**: Based on current results, assign one model+config to each of the N agent slots.
+   - Round 1: Spread across model families (e.g., slot 1=LightGBM, slot 2=XGBoost, slot 3=CatBoost)
+   - Later rounds: Focus on promising families with different HPs, or try feature engineering variants
+
+2. **Execute**: Call `train_model_async` N times — one per agent slot. These run concurrently in background threads.
+   Print: `Round {r}: Launching {N} parallel jobs...`
+
+3. **Wait**: Call `poll_training_jobs` repeatedly (every 15 seconds) until all jobs show status "completed" or "failed". Print progress as jobs finish:
+   `Round {r}: {completed}/{N} done — {model} finished with {score}`
+
+4. **Discuss**: Analyze ALL round results collectively:
+   - Which model improved most vs previous round?
+   - Which approach plateaued? (3+ rounds without improvement → reassign that slot)
+   - Any slot's model clearly worse? → Switch it to untried family or ensemble
+   - Share insights across slots: if LightGBM found a good HP range, try similar on XGBoost
+   Print: `Round {r} results: [{slot1}: {model} {score}] [{slot2}: {model} {score}] ...`
+   Print: `Discussion: {key insight} → Next round: {assignments}`
+
+5. **Reflect**: Every 3 rounds (not every 3 individual runs), do the standard reflection checkpoint (analyze_run_deep + save_observation)
+
+6. **Stop**: Same criteria — time budget nearly exhausted or target met
+
+When `--agents 1` (default), use the standard sequential `train_model` protocol below.
 
 **CONTEXT RULE (every 3 runs)**: Compact runs older than the 3 most recent into a single line: `Runs {start}-{end}: best was #{n} at {score} ({model})`. From this point forward, reference ONLY that summary for older runs. Do NOT repeat their individual run details.
 

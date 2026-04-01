@@ -39,6 +39,8 @@ dependencies = [
 
 [project.optional-dependencies]
 tabpfn = ["tabpfn>=2.0"]
+tabicl = ["tabicl"]
+deep = ["tabicl", "tabpfn>=2.0"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",

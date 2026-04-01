@@ -252,6 +252,8 @@ def _read_json(filepath: Path) -> dict[str, Any]:
 
 
 def _write_json(filepath: Path, data: Any) -> None:
-    """Write data to a JSON file."""
-    with open(filepath, "w") as f:
+    """Write data to a JSON file atomically (temp file + rename)."""
+    tmp = filepath.with_suffix(".tmp")
+    with open(tmp, "w") as f:
         json.dump(data, f, indent=2, default=str)
+    tmp.rename(filepath)

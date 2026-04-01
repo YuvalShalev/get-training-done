@@ -2,18 +2,29 @@
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from gtd.core import workspace
+from gtd.core.data_splitter import create_data_split
 from gtd.core.trainer import (
     _discover_memory_dir,
+    _load_session_start,
     _store_memory_dir,
+    _store_session_start,
     export_model,
     predict,
     train_model,
+)
+from gtd.servers.training_server import (
+    get_session_time,
+    get_training_progress,
+    poll_training_jobs,
+    train_model_async,
 )
 
 # ---------------------------------------------------------------------------
@@ -400,3 +411,107 @@ class TestMemoryDirDiscovery:
         # learning_saved should be True or False (not absent),
         # meaning auto-discovery was attempted
         assert "learning_saved" in export_result
+
+
+class TestSessionTime:
+    """Tests for session start timestamp persistence."""
+
+    def test_store_and_load_session_start(self, tmp_path: Path) -> None:
+        start = 1700000000.0
+        _store_session_start(str(tmp_path), start)
+        loaded = _load_session_start(str(tmp_path))
+        assert loaded == start
+
+    def test_load_session_start_missing(self, tmp_path: Path) -> None:
+        assert _load_session_start(str(tmp_path)) is None
+
+    def test_get_session_time_tool(self, tmp_path: Path) -> None:
+        """Integration test for the MCP get_session_time tool."""
+        _store_session_start(str(tmp_path), time.time() - 125)
+        raw = get_session_time(str(tmp_path))
+        result = json.loads(raw)
+        assert result["session_elapsed"] >= 124
+        assert "m" in result["formatted"]
+
+    def test_get_session_time_no_session(self, tmp_path: Path) -> None:
+        raw = get_session_time(str(tmp_path))
+        result = json.loads(raw)
+        assert "error" in result
+
+
+class TestTrainingProgress:
+    """Tests for per-fold training progress tracking."""
+
+    def test_get_training_progress_with_data(self, tmp_path: Path) -> None:
+        progress = {"model_type": "tabicl", "fold": 2, "total_folds": 5,
+                     "fold_score": 0.9123, "elapsed": 42.5}
+        (tmp_path / "training_progress_12345.json").write_text(json.dumps(progress))
+
+        raw = get_training_progress(str(tmp_path))
+        result = json.loads(raw)
+        assert result["model_type"] == "tabicl"
+        assert result["fold"] == 2
+        assert result["total_folds"] == 5
+
+    def test_get_training_progress_no_training(self, tmp_path: Path) -> None:
+        raw = get_training_progress(str(tmp_path))
+        result = json.loads(raw)
+        assert result["status"] == "no_training_in_progress"
+
+
+class TestAsyncTraining:
+    """Tests for async training tools."""
+
+    def test_train_model_async_returns_job_id(self) -> None:
+        raw = train_model_async(
+            workspace_path="/tmp/fake",
+            data_path="/tmp/fake.csv",
+            model_type="xgboost",
+            hyperparameters={},
+            feature_columns=["a"],
+            target_column="y",
+            task_type="binary_classification",
+        )
+        result = json.loads(raw)
+        assert "job_id" in result
+        assert result["status"] == "running"
+        assert result["model_type"] == "xgboost"
+
+    def test_poll_training_jobs_returns_list(self) -> None:
+        raw = poll_training_jobs(workspace_path="/tmp/fake")
+        result = json.loads(raw)
+        assert "jobs" in result
+        assert isinstance(result["jobs"], list)
+
+    def test_async_job_completes(self, iris_csv: Path, ws_path: Path) -> None:
+        """End-to-end: async job trains and completes."""
+        split = create_data_split(
+            str(ws_path), str(iris_csv), "species", "multiclass_classification",
+        )
+        train_path = split["train_data_path"]
+        features = ["sepal_length", "sepal_width", "petal_length", "petal_width"]
+
+        raw = train_model_async(
+            workspace_path=str(ws_path),
+            data_path=train_path,
+            model_type="random_forest",
+            hyperparameters={"n_estimators": 10, "max_depth": 3},
+            feature_columns=features,
+            target_column="species",
+            task_type="multiclass_classification",
+            cv_folds=2,
+        )
+        job = json.loads(raw)
+        job_id = job["job_id"]
+
+        # Poll until done (max 30s)
+        for _ in range(30):
+            poll_raw = poll_training_jobs(workspace_path=str(ws_path))
+            poll = json.loads(poll_raw)
+            matching = [j for j in poll["jobs"] if j["job_id"] == job_id]
+            if matching and matching[0]["status"] == "completed":
+                assert "result" in matching[0]
+                assert matching[0]["result"]["mean_score"] > 0
+                return
+            time.sleep(1)
+        pytest.fail("Async training job did not complete within 30 seconds")
